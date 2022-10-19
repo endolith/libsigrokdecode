@@ -180,7 +180,7 @@ class Decoder(srd.Decoder):
                         else: # Falling clock edge.
                             bit_so = change.so
                     elif change.matched[0] and \
-                                    change.cs == 0 and change.sk == 0:
+                                        change.cs == 0 and change.sk == 0:
                         # End of packet.
                         self.put(bit_start, change.samplenum, self.out_ann,
                                  [1, ['SI bit: %d' % bit_si,
@@ -190,5 +190,4 @@ class Decoder(srd.Decoder):
                                       'SO: %d' % bit_so, '%d' % bit_so]])
                         pydata.append(PyPacket(bit_start, change.samplenum,
                                       bit_si, bit_so))
-                self.put(packet[0].samplenum, packet[len(packet) - 1].samplenum,
-                         self.out_python, pydata)
+                self.put(packet[0].samplenum, packet[-1].samplenum, self.out_python, pydata)

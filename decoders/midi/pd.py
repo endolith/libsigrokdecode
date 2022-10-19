@@ -98,11 +98,11 @@ class Decoder(srd.Decoder):
         note, velocity = c[0], c[1]
         note_name = self.get_note_name(chan, note)
         self.putx([0, ['Channel %d: %s (note = %d \'%s\', velocity = %d)' % \
-                  (chan, status_bytes[msg][0], note, note_name, velocity),
+                      (chan, status_bytes[msg][0], note, note_name, velocity),
                   'ch %d: %s %d, velocity = %d' % \
-                  (chan, status_bytes[msg][1], note, velocity),
+                      (chan, status_bytes[msg][1], note, velocity),
                   '%d: %s %d, vel %d' % \
-                  (chan, status_bytes[msg][2], note, velocity)]])
+                      (chan, status_bytes[msg][2], note, velocity)]])
         self.cmd, self.state = [], 'IDLE'
         self.soft_clear_status_byte()
 
@@ -120,11 +120,11 @@ class Decoder(srd.Decoder):
         s = status_bytes[0x80] if (velocity == 0) else status_bytes[msg]
         note_name = self.get_note_name(chan, note)
         self.putx([0, ['Channel %d: %s (note = %d \'%s\', velocity = %d)' % \
-                  (chan, s[0], note, note_name, velocity),
+                      (chan, s[0], note, note_name, velocity),
                   'ch %d: %s %d, velocity = %d' % \
-                  (chan, s[1], note, velocity),
+                      (chan, s[1], note, velocity),
                   '%d: %s %d, vel %d' % \
-                  (chan, s[2], note, velocity)]])
+                      (chan, s[2], note, velocity)]])
         self.cmd, self.state = [], 'IDLE'
         self.soft_clear_status_byte()
 
@@ -140,11 +140,11 @@ class Decoder(srd.Decoder):
         note, pressure = c[0], c[1]
         note_name = self.get_note_name(chan, note)
         self.putx([0, ['Channel %d: %s of %d for note = %d \'%s\'' % \
-                  (chan, status_bytes[msg][0], pressure, note, note_name),
+                      (chan, status_bytes[msg][0], pressure, note, note_name),
                   'ch %d: %s %d for note %d' % \
-                  (chan, status_bytes[msg][1], pressure, note),
+                      (chan, status_bytes[msg][1], pressure, note),
                   '%d: %s %d, N %d' % \
-                  (chan, status_bytes[msg][2], pressure, note)]])
+                      (chan, status_bytes[msg][2], pressure, note)]])
         self.cmd, self.state = [], 'IDLE'
         self.soft_clear_status_byte()
 
@@ -156,13 +156,13 @@ class Decoder(srd.Decoder):
         vv = c[1]
         t = ('normal', 'no') if vv <= 0x3f else ('legato', 'yes')
         self.putx([0, ['Channel %d: %s \'%s\' = %s' % \
-                  (chan, status_bytes[msg][0],
+                      (chan, status_bytes[msg][0],
                   control_functions[0x44][0], t[0]),
                   'ch %d: %s \'%s\' = %s' % \
-                  (chan, status_bytes[msg][1],
+                      (chan, status_bytes[msg][1],
                   control_functions[0x44][1], t[0]),
                   '%d: %s \'%s\' = %s' % \
-                  (chan, status_bytes[msg][2],
+                      (chan, status_bytes[msg][2],
                   control_functions[0x44][2], t[1])]])
 
     def handle_controller_0x54(self):
@@ -173,13 +173,13 @@ class Decoder(srd.Decoder):
         kk = c[1]
         kk_name = self.get_note_name(chan, kk)
         self.putx([0, ['Channel %d: %s \'%s\' (source note = %d / %s)' % \
-                  (chan, status_bytes[msg][0],
+                      (chan, status_bytes[msg][0],
                   control_functions[0x54][0], kk, kk_name),
                   'ch %d: %s \'%s\' (source note = %d)' % \
-                  (chan, status_bytes[msg][1],
+                      (chan, status_bytes[msg][1],
                   control_functions[0x54][1], kk),
                   '%d: %s \'%s\' (src N %d)' % \
-                  (chan, status_bytes[msg][2],
+                      (chan, status_bytes[msg][2],
                   control_functions[0x54][2], kk)]])
 
     def handle_controller_generic(self):
@@ -191,11 +191,11 @@ class Decoder(srd.Decoder):
         if ctrl_fn == default_name:
             ctrl_fn = ('undefined 0x%02x' % fn, 'undef 0x%02x' % fn, '0x%02x' % fn)
         self.putx([0, ['Channel %d: %s \'%s\' (param = 0x%02x)' % \
-                  (chan, status_bytes[msg][0], ctrl_fn[0], param),
+                      (chan, status_bytes[msg][0], ctrl_fn[0], param),
                   'ch %d: %s \'%s\' (param = 0x%02x)' % \
-                  (chan, status_bytes[msg][1], ctrl_fn[1], param),
+                      (chan, status_bytes[msg][1], ctrl_fn[1], param),
                   '%d: %s \'%s\' is 0x%02x' % \
-                  (chan, status_bytes[msg][2], ctrl_fn[2], param)]])
+                      (chan, status_bytes[msg][2], ctrl_fn[2], param)]])
 
     def handle_channel_mode(self):
         # Channel Mode: Bn mm vv
@@ -206,29 +206,26 @@ class Decoder(srd.Decoder):
         mode_fn = control_functions.get(mm, ('undefined', 'undef', 'undef'))
         # Decode the value based on the mode number.
         vv_string = ('', '')
-        if mm == 122:           # mode = local control?
-            if vv == 0:
-                vv_string = ('off', 'off')
-            elif vv == 127:     # mode = poly mode on?
-                vv_string = ('on', 'on')
-            else:
-                vv_string = ('(non-standard param value of 0x%02x)' % vv,
-                            '0x%02x' % vv)
-        elif mm == 126:         # mode = mono mode on?
-            if vv != 0:
-                vv_string = ('(%d channels)' % vv, '(%d ch)' % vv)
-            else:
-                vv_string = ('(channels \'basic\' through 16)',
-                            '(ch \'basic\' thru 16)')
-        elif vv != 0: # All other channel mode messages expect vv == 0.
+        if mm == 122 and vv == 0:
+            vv_string = ('off', 'off')
+        elif mm == 122 and vv == 127:
+            vv_string = ('on', 'on')
+        elif mm == 122 or mm != 126 and vv != 0:
             vv_string = ('(non-standard param value of 0x%02x)' % vv,
                         '0x%02x' % vv)
+        elif mm == 126:     # mode = mono mode on?
+            vv_string = (
+                ('(%d channels)' % vv, '(%d ch)' % vv)
+                if vv != 0
+                else ('(channels \'basic\' through 16)', '(ch \'basic\' thru 16)')
+            )
+
         self.putx([0, ['Channel %d: %s \'%s\' %s' % \
-                      (chan, status_bytes[msg][0], mode_fn[0], vv_string[0]),
+                          (chan, status_bytes[msg][0], mode_fn[0], vv_string[0]),
                       'ch %d: %s \'%s\' %s' % \
-                      (chan, status_bytes[msg][1], mode_fn[1], vv_string[1]),
+                          (chan, status_bytes[msg][1], mode_fn[1], vv_string[1]),
                       '%d: %s \'%s\' %s' % \
-                      (chan, status_bytes[msg][2], mode_fn[2], vv_string[1])]])
+                          (chan, status_bytes[msg][2], mode_fn[2], vv_string[1])]])
         self.cmd, self.state = [], 'IDLE'
         self.soft_clear_status_byte()
 
@@ -267,11 +264,11 @@ class Decoder(srd.Decoder):
             change_type = 'drum kit'
             name = drum_kit.get(pp, 'undefined')
         self.putx([0, ['Channel %d: %s to %s %d (assuming %s)' % \
-            (chan, status_bytes[msg][0], change_type, pp, name),
+                (chan, status_bytes[msg][0], change_type, pp, name),
             'ch %d: %s to %s %d' % \
-            (chan, status_bytes[msg][1], change_type, pp),
+                (chan, status_bytes[msg][1], change_type, pp),
             '%d: %s %d' % \
-            (chan, status_bytes[msg][2], pp)]])
+                (chan, status_bytes[msg][2], pp)]])
         self.cmd, self.state = [], 'IDLE'
         self.soft_clear_status_byte()
 
@@ -303,11 +300,11 @@ class Decoder(srd.Decoder):
         ll, mm = self.cmd[0], self.cmd[1]
         decimal = (mm << 7) + ll
         self.putx([0, ['Channel %d: %s 0x%02x 0x%02x (%d)' % \
-                      (chan, status_bytes[msg][0], ll, mm, decimal),
+                          (chan, status_bytes[msg][0], ll, mm, decimal),
                       'ch %d: %s 0x%02x 0x%02x (%d)' % \
-                      (chan, status_bytes[msg][1], ll, mm, decimal),
+                          (chan, status_bytes[msg][1], ll, mm, decimal),
                       '%d: %s (%d)' % \
-                      (chan, status_bytes[msg][2], decimal)]])
+                          (chan, status_bytes[msg][2], decimal)]])
         self.cmd, self.state = [], 'IDLE'
         self.soft_clear_status_byte()
 
@@ -347,11 +344,17 @@ class Decoder(srd.Decoder):
         # to isolate the data.
         msg = self.cmd.pop(0)
         if len(self.cmd) < 1:
-            self.putx([2, ['%s: truncated manufacturer code (<1 bytes)' % \
-                          status_bytes[msg][0],
-                          '%s: truncated manufacturer (<1 bytes)' % \
-                          status_bytes[msg][1],
-                          '%s: trunc. manu.' % status_bytes[msg][2]]])
+            self.putx(
+                [
+                    2,
+                    [
+                        f'{status_bytes[msg][0]}: truncated manufacturer code (<1 bytes)',
+                        f'{status_bytes[msg][1]}: truncated manufacturer (<1 bytes)',
+                        f'{status_bytes[msg][2]}: trunc. manu.',
+                    ],
+                ]
+            )
+
             self.cmd, self.state = [], 'IDLE'
             return
         # Extract the manufacturer name (or SysEx realtime or non-realtime).
@@ -359,11 +362,17 @@ class Decoder(srd.Decoder):
         manu = (m1,)
         if m1 == 0x00:  # If byte == 0, then 2 more manufacturer bytes follow.
             if len(self.cmd) < 2:
-                self.putx([2, ['%s: truncated manufacturer code (<3 bytes)' % \
-                          status_bytes[msg][0],
-                          '%s: truncated manufacturer (<3 bytes)' % \
-                          status_bytes[msg][1],
-                          '%s: trunc. manu.' % status_bytes[msg][2]]])
+                self.putx(
+                    [
+                        2,
+                        [
+                            f'{status_bytes[msg][0]}: truncated manufacturer code (<3 bytes)',
+                            f'{status_bytes[msg][1]}: truncated manufacturer (<3 bytes)',
+                            f'{status_bytes[msg][2]}: trunc. manu.',
+                        ],
+                    ]
+                )
+
                 self.cmd, self.state = [], 'IDLE'
                 return
             manu = (m1, self.cmd.pop(0), self.cmd.pop(0))
@@ -372,7 +381,7 @@ class Decoder(srd.Decoder):
         if manu_name == default_name:
             if len(manu) == 3:
                 manu_name = ('%s (0x%02x 0x%02x 0x%02x)' % \
-                            (default_name, manu[0], manu[1], manu[2]),
+                                (default_name, manu[0], manu[1], manu[2]),
                             default_name)
             else:
                 manu_name = ('%s (0x%02x)' % (default_name, manu[0]),
@@ -392,11 +401,11 @@ class Decoder(srd.Decoder):
             payload1 = '<>'
         payload = (payload0, payload1)
         self.putx([0, ['%s: for \'%s\' with payload %s' % \
-                      (status_bytes[msg][0], manu_name[0], payload[0]),
+                          (status_bytes[msg][0], manu_name[0], payload[0]),
                       '%s: \'%s\', payload %s' % \
-                      (status_bytes[msg][1], manu_name[1], payload[1]),
+                          (status_bytes[msg][1], manu_name[1], payload[1]),
                       '%s: \'%s\', payload %s' % \
-                      (status_bytes[msg][2], manu_name[1], payload[1])]])
+                          (status_bytes[msg][2], manu_name[1], payload[1])]])
         self.cmd, self.state = [], 'IDLE'
 
     def handle_syscommon_midi_time_code_quarter_frame_msg(self, newbyte):
@@ -417,26 +426,26 @@ class Decoder(srd.Decoder):
         self.es_block = self.es
         if nn != 7: # If message type does not contain SMPTE type.
             self.putx([0, ['%s: %s of %s, value 0x%01x' % \
-                          (group[0], status_bytes[msg][0],
+                              (group[0], status_bytes[msg][0],
                           quarter_frame_type[nn][0], dd),
                           '%s: %s of %s, value 0x%01x' % \
-                          (group[1], status_bytes[msg][1],
+                              (group[1], status_bytes[msg][1],
                           quarter_frame_type[nn][1], dd),
                           '%s: %s of %s, value 0x%01x' % \
-                          (group[2], status_bytes[msg][2],
+                              (group[2], status_bytes[msg][2],
                           quarter_frame_type[nn][1], dd)]])
             self.cmd, self.state = [], 'IDLE'
             return
         tt = (dd & 0x6) >> 1
         self.putx([0, ['%s: %s of %s, value 0x%01x for %s' % \
-                      (group[0], status_bytes[msg][0], \
-                      quarter_frame_type[nn][0], dd, smpte_type[tt]),
+                          (group[0], status_bytes[msg][0], \
+                          quarter_frame_type[nn][0], dd, smpte_type[tt]),
                       '%s: %s of %s, value 0x%01x for %s' % \
-                      (group[1], status_bytes[msg][1], \
-                      quarter_frame_type[nn][1], dd, smpte_type[tt]),
+                          (group[1], status_bytes[msg][1], \
+                          quarter_frame_type[nn][1], dd, smpte_type[tt]),
                       '%s: %s of %s, value 0x%01x for %s' % \
-                      (group[2], status_bytes[msg][2], \
-                      quarter_frame_type[nn][1], dd, smpte_type[tt])]])
+                          (group[2], status_bytes[msg][2], \
+                          quarter_frame_type[nn][1], dd, smpte_type[tt])]])
         self.cmd, self.state = [], 'IDLE'
 
     def handle_syscommon_msg(self, newbyte):
@@ -470,11 +479,11 @@ class Decoder(srd.Decoder):
             decimal = (mm << 7) + ll
             self.es_block = self.es
             self.putx([0, ['%s: %s 0x%02x 0x%02x (%d)' % \
-                          (group[0], status_bytes[msg][0], ll, mm, decimal),
+                              (group[0], status_bytes[msg][0], ll, mm, decimal),
                           '%s: %s 0x%02x 0x%02x (%d)' % \
-                          (group[1], status_bytes[msg][1], ll, mm, decimal),
+                              (group[1], status_bytes[msg][1], ll, mm, decimal),
                           '%s: %s (%d)' % \
-                          (group[2], status_bytes[msg][2], decimal)]])
+                              (group[2], status_bytes[msg][2], decimal)]])
         elif msg == 0xf3:
             # Song select: F3 ss
             # ss = song selection number
@@ -485,18 +494,26 @@ class Decoder(srd.Decoder):
             ss = c[1]
             self.es_block = self.es
             self.putx([0, ['%s: %s number %d' % \
-                          (group[0], status_bytes[msg][0], ss),
+                              (group[0], status_bytes[msg][0], ss),
                           '%s: %s number %d' % \
-                          (group[1], status_bytes[msg][1], ss),
+                              (group[1], status_bytes[msg][1], ss),
                           '%s: %s # %d' % \
-                          (group[2], status_bytes[msg][2], ss)]])
-        elif msg == 0xf4 or msg == 0xf5 or msg == 0xf6:
+                              (group[2], status_bytes[msg][2], ss)]])
+        elif msg in [0xF4, 0xF5, 0xF6]:
             # Undefined 0xf4, Undefined 0xf5, and Tune Request (respectively).
             # All are only 1 byte long with no data bytes.
             self.es_block = self.es
-            self.putx([0, ['%s: %s' % (group[0], status_bytes[msg][0]),
-                          '%s: %s' % (group[1], status_bytes[msg][1]),
-                          '%s: %s' % (group[2], status_bytes[msg][2])]])
+            self.putx(
+                [
+                    0,
+                    [
+                        f'{group[0]}: {status_bytes[msg][0]}',
+                        f'{group[1]}: {status_bytes[msg][1]}',
+                        f'{group[2]}: {status_bytes[msg][2]}',
+                    ],
+                ]
+            )
+
         self.cmd, self.state = [], 'IDLE'
 
     def handle_sysrealtime_msg(self, newbyte):
@@ -511,9 +528,17 @@ class Decoder(srd.Decoder):
         old_ss_block, old_es_block = self.ss_block, self.es_block
         self.ss_block, self.es_block = self.ss, self.es
         group = ('System Realtime', 'SysReal', 'SR')
-        self.putx([1, ['%s: %s' % (group[0], status_bytes[newbyte][0]),
-                      '%s: %s' % (group[1], status_bytes[newbyte][1]),
-                      '%s: %s' % (group[2], status_bytes[newbyte][2])]])
+        self.putx(
+            [
+                1,
+                [
+                    f'{group[0]}: {status_bytes[newbyte][0]}',
+                    f'{group[1]}: {status_bytes[newbyte][1]}',
+                    f'{group[2]}: {status_bytes[newbyte][2]}',
+                ],
+            ]
+        )
+
         self.ss_block, self.es_block = old_ss_block, old_es_block
         # Deliberately not resetting self.cmd or self.state.
 
@@ -533,8 +558,7 @@ class Decoder(srd.Decoder):
                 payload = '0x%02x' % self.cmd[index]
             else:
                 payload += ' 0x%02x' % self.cmd[index]
-        self.putx([2, ['UNHANDLED DATA: %s' % payload,
-                      'UNHANDLED', '???', '?']])
+        self.putx([2, [f'UNHANDLED DATA: {payload}', 'UNHANDLED', '???', '?']])
         self.cmd, self.state = [], 'IDLE'
         self.hard_clear_status_byte()
 
@@ -609,7 +633,7 @@ class Decoder(srd.Decoder):
             # This is a status byte, remember the start sample.
             if state != 'HANDLE SYSREALTIME MSG':
                 self.ss_block = ss
-        elif self.state == 'IDLE' or self.state == 'BUFFER GARBAGE MSG':
+        elif self.state in ['IDLE', 'BUFFER GARBAGE MSG']:
             # Deal with "running status" or that we're buffering garbage.
             self.ss, self.es = ss, es
             if self.state == 'IDLE':

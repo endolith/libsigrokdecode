@@ -141,9 +141,12 @@ class Decoder(srd.Decoder):
             count = b[1][2]
             self.put_count(b[1])
             if len(b) - 1 != count:
-                self.put_warning(b[0][0], b[-1][1],
-                    'Invalid frame length: Got {}, expecting {} '.format(
-                    len(b) - 1, count))
+                self.put_warning(
+                    b[0][0],
+                    b[-1][1],
+                    f'Invalid frame length: Got {len(b) - 1}, expecting {count} ',
+                )
+
                 return
             self.opcode = b[2][2]
             self.put_opcode(b[2])
@@ -156,18 +159,18 @@ class Decoder(srd.Decoder):
         b = self.bytes
         count = b[0][2]
         self.put_count(b[0])
-        if self.waddr == WORD_ADDR_RESET:
+        if (
+            self.waddr != WORD_ADDR_RESET
+            and self.waddr == WORD_ADDR_COMMAND
+            and count == 4
+            or self.waddr == WORD_ADDR_RESET
+        ): # Status / Error.
             self.put_data([b[1]])
             self.put_crc([b[2], b[3]])
             self.put_status(b[0][0], b[-1][1], b[1][2])
         elif self.waddr == WORD_ADDR_COMMAND:
-            if count == 4: # Status / Error.
-                self.put_data([b[1]])
-                self.put_crc([b[2], b[3]])
-                self.put_status(b[0][0], b[-1][1], b[1][2])
-            else:
-                self.put_data(b[1:-2])
-                self.put_crc([b[-2], b[-1]])
+            self.put_data(b[1:-2])
+            self.put_crc([b[-2], b[-1]])
 
     def putx(self, s, data):
         self.put(s[0], s[1], self.out_ann, data)
@@ -179,39 +182,62 @@ class Decoder(srd.Decoder):
         self.put(ss, es, self.out_ann, data)
 
     def put_waddr(self, s):
-        self.putx(s, [0, ['Word addr: %s' % WORD_ADDR[s[2]]]])
+        self.putx(s, [0, [f'Word addr: {WORD_ADDR[s[2]]}']])
 
     def put_count(self, s):
-        self.putx(s, [1, ['Count: %s' % s[2]]])
+        self.putx(s, [1, [f'Count: {s[2]}']])
 
     def put_opcode(self, s):
-        self.putx(s, [2, ['Opcode: %s' % OPCODES[s[2]]]])
+        self.putx(s, [2, [f'Opcode: {OPCODES[s[2]]}']])
 
     def put_param1(self, s):
         op = self.opcode
         if op in (OPCODE_CHECK_MAC, OPCODE_COUNTER, OPCODE_DEV_REV,     \
-                  OPCODE_ECDH, OPCODE_GEN_KEY, OPCODE_HMAC, OPCODE_MAC, \
-                  OPCODE_NONCE, OPCODE_RANDOM, OPCODE_SHA, OPCODE_SIGN, \
-                  OPCODE_VERIFY):
+                      OPCODE_ECDH, OPCODE_GEN_KEY, OPCODE_HMAC, OPCODE_MAC, \
+                      OPCODE_NONCE, OPCODE_RANDOM, OPCODE_SHA, OPCODE_SIGN, \
+                      OPCODE_VERIFY):
             self.putx(s, [3, ['Mode: %02X' % s[2]]])
         elif op == OPCODE_DERIVE_KEY:
-            self.putx(s, [3, ['Random: %s' % s[2]]])
+            self.putx(s, [3, [f'Random: {s[2]}']])
         elif op == OPCODE_PRIVWRITE:
-            self.putx(s, [3, ['Encrypted: {}'.format('Yes' if s[2] & 0x40 else 'No')]])
+            self.putx(s, [3, [f"Encrypted: {'Yes' if s[2] & 64 else 'No'}"]])
         elif op == OPCODE_GEN_DIG:
-            self.putx(s, [3, ['Zone: %s' % ZONES[s[2]]]])
+            self.putx(s, [3, [f'Zone: {ZONES[s[2]]}']])
         elif op == OPCODE_LOCK:
-            self.putx(s, [3, ['Zone: {}, Summary: {}'.format(
-                'DATA/OTP' if s[2] else 'CONFIG',
-                'Ignored' if s[2] & 0x80 else 'Used')]])
+            self.putx(
+                s,
+                [
+                    3,
+                    [
+                        f"Zone: {'DATA/OTP' if s[2] else 'CONFIG'}, Summary: {'Ignored' if s[2] & 128 else 'Used'}"
+                    ],
+                ],
+            )
+
         elif op == OPCODE_PAUSE:
             self.putx(s, [3, ['Selector: %02X' % s[2]]])
         elif op == OPCODE_READ:
-            self.putx(s, [3, ['Zone: {}, Length: {}'.format(ZONES[s[2] & 0x03],
-                '32 bytes' if s[2] & 0x90 else '4 bytes')]])
+            self.putx(
+                s,
+                [
+                    3,
+                    [
+                        f"Zone: {ZONES[s[2] & 3]}, Length: {'32 bytes' if s[2] & 144 else '4 bytes'}"
+                    ],
+                ],
+            )
+
         elif op == OPCODE_WRITE:
-            self.putx(s, [3, ['Zone: {}, Encrypted: {}, Length: {}'.format(ZONES[s[2] & 0x03],
-                'Yes' if s[2] & 0x40 else 'No', '32 bytes' if s[2] & 0x90 else '4 bytes')]])
+            self.putx(
+                s,
+                [
+                    3,
+                    [
+                        f"Zone: {ZONES[s[2] & 3]}, Encrypted: {'Yes' if s[2] & 64 else 'No'}, Length: {'32 bytes' if s[2] & 144 else '4 bytes'}"
+                    ],
+                ],
+            )
+
         else:
             self.putx(s, [3, ['Param1: %02X' % s[2]]])
 
@@ -240,50 +266,189 @@ class Decoder(srd.Decoder):
             return
         op = self.opcode
         if op == OPCODE_CHECK_MAC:
-            self.putz(s[0][0], s[31][1], [5, ['ClientChal: %s' % ' '.join(format(i[2], '02x') for i in s[0:32])]])
-            self.putz(s[32][0], s[63][1], [5, ['ClientResp: %s' % ' '.join(format(i[2], '02x') for i in s[32:64])]])
-            self.putz(s[64][0], s[76][1], [5, ['OtherData: %s' % ' '.join(format(i[2], '02x') for i in s[64:77])]])
+            self.putz(
+                s[0][0],
+                s[31][1],
+                [
+                    5,
+                    [
+                        f"ClientChal: {' '.join(format(i[2], '02x') for i in s[:32])}"
+                    ],
+                ],
+            )
+
+            self.putz(
+                s[32][0],
+                s[63][1],
+                [
+                    5,
+                    [
+                        f"ClientResp: {' '.join(format(i[2], '02x') for i in s[32:64])}"
+                    ],
+                ],
+            )
+
+            self.putz(
+                s[64][0],
+                s[76][1],
+                [
+                    5,
+                    [
+                        f"OtherData: {' '.join(format(i[2], '02x') for i in s[64:77])}"
+                    ],
+                ],
+            )
+
         elif op == OPCODE_DERIVE_KEY:
-            self.putz(s[0][0], s[31][1], [5, ['MAC: %s' % ' '.join(format(i[2], '02x') for i in s)]])
+            self.putz(
+                s[0][0],
+                s[31][1],
+                [5, [f"MAC: {' '.join(format(i[2], '02x') for i in s)}"]],
+            )
+
         elif op == OPCODE_ECDH:
-            self.putz(s[0][0], s[31][1], [5, ['Pub X: %s' % ' '.join(format(i[2], '02x') for i in s[0:32])]])
-            self.putz(s[32][0], s[63][1], [5, ['Pub Y: %s' % ' '.join(format(i[2], '02x') for i in s[32:64])]])
+            self.putz(
+                s[0][0],
+                s[31][1],
+                [5, [f"Pub X: {' '.join(format(i[2], '02x') for i in s[:32])}"]],
+            )
+
+            self.putz(
+                s[32][0],
+                s[63][1],
+                [5, [f"Pub Y: {' '.join(format(i[2], '02x') for i in s[32:64])}"]],
+            )
+
         elif op in (OPCODE_GEN_DIG, OPCODE_GEN_KEY):
-            self.putz(s[0][0], s[3][1], [5, ['OtherData: %s' % ' '.join(format(i[2], '02x') for i in s)]])
+            self.putz(
+                s[0][0],
+                s[3][1],
+                [5, [f"OtherData: {' '.join(format(i[2], '02x') for i in s)}"]],
+            )
+
         elif op == OPCODE_MAC:
-            self.putz(s[0][0], s[31][1], [5, ['Challenge: %s' % ' '.join(format(i[2], '02x') for i in s)]])
+            self.putz(
+                s[0][0],
+                s[31][1],
+                [5, [f"Challenge: {' '.join(format(i[2], '02x') for i in s)}"]],
+            )
+
         elif op == OPCODE_PRIVWRITE:
             if len(s) > 36: # Key + MAC.
-                self.putz(s[0][0], s[-35][1], [5, ['Value: %s' % ' '.join(format(i[2], '02x') for i in s)]])
-                self.putz(s[-32][0], s[-1][1], [5, ['MAC: %s' % ' '.join(format(i[2], '02x') for i in s)]])
+                self.putz(
+                    s[0][0],
+                    s[-35][1],
+                    [5, [f"Value: {' '.join(format(i[2], '02x') for i in s)}"]],
+                )
+
+                self.putz(
+                    s[-32][0],
+                    s[-1][1],
+                    [5, [f"MAC: {' '.join(format(i[2], '02x') for i in s)}"]],
+                )
+
             else: # Just value.
-                self.putz(s[0][0], s[-1][1], [5, ['Value: %s' % ' '.join(format(i[2], '02x') for i in s)]])
+                self.putz(
+                    s[0][0],
+                    s[-1][1],
+                    [5, [f"Value: {' '.join(format(i[2], '02x') for i in s)}"]],
+                )
+
         elif op == OPCODE_VERIFY:
             if len(s) >= 64: # ECDSA components (always present)
-                self.putz(s[0][0], s[31][1], [5, ['ECDSA R: %s' % ' '.join(format(i[2], '02x') for i in s[0:32])]])
-                self.putz(s[32][0], s[63][1], [5, ['ECDSA S: %s' % ' '.join(format(i[2], '02x') for i in s[32:64])]])
+                self.putz(
+                    s[0][0],
+                    s[31][1],
+                    [
+                        5,
+                        [
+                            f"ECDSA R: {' '.join(format(i[2], '02x') for i in s[:32])}"
+                        ],
+                    ],
+                )
+
+                self.putz(
+                    s[32][0],
+                    s[63][1],
+                    [
+                        5,
+                        [
+                            f"ECDSA S: {' '.join(format(i[2], '02x') for i in s[32:64])}"
+                        ],
+                    ],
+                )
+
             if len(s) == 83: # OtherData (follow ECDSA components in validate / invalidate mode)
-                self.putz(s[64][0], s[82][1], [5, ['OtherData: %s' % ' '.join(format(i[2], '02x') for i in s[64:83])]])
+                self.putz(
+                    s[64][0],
+                    s[82][1],
+                    [
+                        5,
+                        [
+                            f"OtherData: {' '.join(format(i[2], '02x') for i in s[64:83])}"
+                        ],
+                    ],
+                )
+
             if len(s) == 128: # Public key components (follow ECDSA components in external mode)
-                self.putz(s[64][0], s[95][1], [5, ['Pub X: %s' % ' '.join(format(i[2], '02x') for i in s[64:96])]])
-                self.putz(s[96][0], s[127][1], [5, ['Pub Y: %s' % ' '.join(format(i[2], '02x') for i in s[96:128])]])
+                self.putz(
+                    s[64][0],
+                    s[95][1],
+                    [
+                        5,
+                        [
+                            f"Pub X: {' '.join(format(i[2], '02x') for i in s[64:96])}"
+                        ],
+                    ],
+                )
+
+                self.putz(
+                    s[96][0],
+                    s[127][1],
+                    [
+                        5,
+                        [
+                            f"Pub Y: {' '.join(format(i[2], '02x') for i in s[96:128])}"
+                        ],
+                    ],
+                )
+
         elif op == OPCODE_WRITE:
             if len(s) > 32: # Value + MAC.
-                self.putz(s[0][0], s[-31][1], [5, ['Value: %s' % ' '.join(format(i[2], '02x') for i in s)]])
-                self.putz(s[-32][0], s[-1][1], [5, ['MAC: %s' % ' '.join(format(i[2], '02x') for i in s)]])
+                self.putz(
+                    s[0][0],
+                    s[-31][1],
+                    [5, [f"Value: {' '.join(format(i[2], '02x') for i in s)}"]],
+                )
+
+                self.putz(
+                    s[-32][0],
+                    s[-1][1],
+                    [5, [f"MAC: {' '.join(format(i[2], '02x') for i in s)}"]],
+                )
+
             else: # Just value.
-                self.putz(s[0][0], s[-1][1], [5, ['Value: %s' % ' '.join(format(i[2], '02x') for i in s)]])
+                self.putz(
+                    s[0][0],
+                    s[-1][1],
+                    [5, [f"Value: {' '.join(format(i[2], '02x') for i in s)}"]],
+                )
+
         else:
-            self.putz(s[0][0], s[-1][1], [5, ['Data: %s' % ' '.join(format(i[2], '02x') for i in s)]])
+            self.putz(
+                s[0][0],
+                s[-1][1],
+                [5, [f"Data: {' '.join(format(i[2], '02x') for i in s)}"]],
+            )
 
     def put_crc(self, s):
         self.puty(s, [6, ['CRC: {:02X} {:02X}'.format(s[0][2], s[1][2])]])
 
     def put_status(self, ss, es, status):
-        self.putz(ss, es, [7, ['Status: %s' % STATUS[status]]])
+        self.putz(ss, es, [7, [f'Status: {STATUS[status]}']])
 
     def put_warning(self, ss, es, msg):
-        self.putz(ss, es, [8, ['Warning: %s' % msg]])
+        self.putz(ss, es, [8, [f'Warning: {msg}']])
 
     def decode(self, ss, es, data):
         cmd, databyte = data

@@ -129,31 +129,49 @@ class Decoder(srd.Decoder):
                 self.tmp |= (bit << (c - 1))
             if c == 14:
                 s = '{:014b}'.format(self.tmp)
-                self.putb([1, ['Special bits: %s' % s, 'SB: %s' % s]])
+                self.putb([1, [f'Special bits: {s}', f'SB: {s}']])
         elif c == 15:
             s = '' if (bit == 1) else 'not '
-            self.putx([2, ['Call bit: %sset' % s, 'CB: %sset' % s]])
-            # TODO: Previously this bit indicated use of the backup antenna.
+            self.putx([2, [f'Call bit: {s}set', f'CB: {s}set']])
+                # TODO: Previously this bit indicated use of the backup antenna.
         elif c == 16:
             s = '' if (bit == 1) else 'not '
             x = 'yes' if (bit == 1) else 'no'
-            self.putx([3, ['Summer time announcement: %sactive' % s,
-                           'Summer time: %sactive' % s,
-                           'Summer time: %s' % x, 'ST: %s' % x]])
+            self.putx(
+                [
+                    3,
+                    [
+                        f'Summer time announcement: {s}active',
+                        f'Summer time: {s}active',
+                        f'Summer time: {x}',
+                        f'ST: {x}',
+                    ],
+                ]
+            )
+
         elif c == 17:
             s = '' if (bit == 1) else 'not '
             x = 'yes' if (bit == 1) else 'no'
-            self.putx([4, ['CEST: %sin effect' % s, 'CEST: %s' % x]])
+            self.putx([4, [f'CEST: {s}in effect', f'CEST: {x}']])
         elif c == 18:
             s = '' if (bit == 1) else 'not '
             x = 'yes' if (bit == 1) else 'no'
-            self.putx([5, ['CET: %sin effect' % s, 'CET: %s' % x]])
+            self.putx([5, [f'CET: {s}in effect', f'CET: {x}']])
         elif c == 19:
             s = '' if (bit == 1) else 'not '
             x = 'yes' if (bit == 1) else 'no'
-            self.putx([6, ['Leap second announcement: %sactive' % s,
-                           'Leap second: %sactive' % s,
-                           'Leap second: %s' % x, 'LS: %s' % x]])
+            self.putx(
+                [
+                    6,
+                    [
+                        f'Leap second announcement: {s}active',
+                        f'Leap second: {s}active',
+                        f'Leap second: {x}',
+                        f'LS: {x}',
+                    ],
+                ]
+            )
+
         elif c == 20:
             # Start of encoded time: DCF bit 20.
             if bit == 1:
@@ -176,7 +194,7 @@ class Decoder(srd.Decoder):
             self.tmp |= (bit << (c - 21))
             parity = bin(self.tmp).count('1')
             s = 'OK' if ((parity % 2) == 0) else 'INVALID!'
-            self.putx([9, ['Minute parity: %s' % s, 'Min parity: %s' % s]])
+            self.putx([9, [f'Minute parity: {s}', f'Min parity: {s}']])
         elif c in range(29, 34 + 1):
             # Hours (0-23): DCF77 bits 29-34 (BCD format).
             if c == 29:
@@ -191,7 +209,7 @@ class Decoder(srd.Decoder):
             self.tmp |= (bit << (c - 29))
             parity = bin(self.tmp).count('1')
             s = 'OK' if ((parity % 2) == 0) else 'INVALID!'
-            self.putx([11, ['Hour parity: %s' % s]])
+            self.putx([11, [f'Hour parity: {s}']])
         elif c in range(36, 41 + 1):
             # Day of month (1-31): DCF77 bits 36-41 (BCD format).
             if c == 36:
@@ -247,7 +265,7 @@ class Decoder(srd.Decoder):
             # Even parity over date bits (36-58): DCF77 bit 58.
             parity = self.datebits.count(1)
             s = 'OK' if ((parity % 2) == 0) else 'INVALID!'
-            self.putx([16, ['Date parity: %s' % s, 'DP: %s' % s]])
+            self.putx([16, [f'Date parity: {s}', f'DP: {s}']])
             self.datebits = []
         else:
             self.putx([19, ['Invalid DCF77 bit: %d' % c,

@@ -124,13 +124,13 @@ class Decoder(srd.Decoder):
         self.describe_changed_bits(bits, old_bits, NAMES)
 
         FREQUENCIES = ['315', '433', '868', '915']
-        f = FREQUENCIES[(cmd[1] & 0x30) >> 4] + 'MHz'
-        self.putx(1, 2, ['Frequency: ' + f, f])
+        f = f'{FREQUENCIES[(cmd[1] & 48) >> 4]}MHz'
+        self.putx(1, 2, [f'Frequency: {f}', f])
         if cmd[1] & 0x30 != self.last_config & 0x30:
             self.putx(5, 2, ['Changed', '~'])
 
         c = '%.1fpF' % (8.5 + (cmd[1] & 0xF) * 0.5)
-        self.putx(1, 4, ['Capacitance: ' + c, c])
+        self.putx(1, 4, [f'Capacitance: {c}', c])
         if cmd[1] & 0xF != self.last_config & 0xF:
             self.putx(5, 4, ['Changed', '~'])
 
@@ -178,21 +178,21 @@ class Decoder(srd.Decoder):
     def handle_receiver_control_cmd(self, cmd, ret):
         self.putx(0, 5, ['Receiver control command'])
         s = 'interrupt input' if (cmd[0] & 0x04) else 'VDI output'
-        self.putx(0, 1, ['pin16 = ' + s])
+        self.putx(0, 1, [f'pin16 = {s}'])
         VDI_NAMES = ['Fast', 'Medium', 'Slow', 'Always on']
         vdi_speed = VDI_NAMES[cmd[0] & 0x3]
-        self.putx(0, 2, ['VDI: %s' % vdi_speed])
+        self.putx(0, 2, [f'VDI: {vdi_speed}'])
         BANDWIDTH_NAMES = ['Reserved', '400kHz', '340kHz', '270kHz', '200kHz',
                            '134kHz', '67kHz', 'Reserved']
         bandwidth = BANDWIDTH_NAMES[(cmd[1] & 0xE0) >> 5]
-        self.putx(0, 3, ['Bandwidth: %s' % bandwidth])
+        self.putx(0, 3, [f'Bandwidth: {bandwidth}'])
         LNA_GAIN_NAMES = [0, -6, -14, -20]
         lna_gain = LNA_GAIN_NAMES[(cmd[1] & 0x18) >> 3]
         self.putx(0, 2, ['LNA gain: %ddB' % lna_gain])
         RSSI_THRESHOLD_NAMES = ['-103', '-97', '-91', '-85', '-79', '-73',
                                 'Reserved', 'Reserved']
         rssi_threshold = RSSI_THRESHOLD_NAMES[cmd[1] & 0x7]
-        self.putx(0, 3, ['RSSI threshold: %s' % rssi_threshold])
+        self.putx(0, 3, [f'RSSI threshold: {rssi_threshold}'])
 
     def handle_data_filter_cmd(self, cmd, ret):
         self.putx(0, 8, ['Data filter command'])
@@ -202,10 +202,10 @@ class Decoder(srd.Decoder):
             clock_recovery = 'fast'
         else:
             clock_recovery = 'slow'
-        self.putx(0, 2, ['Clock recovery: %s mode' % clock_recovery])
+        self.putx(0, 2, [f'Clock recovery: {clock_recovery} mode'])
         self.advance_ann(0, 1) # Should always be 1.
         s = 'analog' if (cmd[1] & 0x10) else 'digital'
-        self.putx(0, 1, ['Data filter: ' + s])
+        self.putx(0, 1, [f'Data filter: {s}'])
         self.advance_ann(0, 1) # Should always be 1.
         self.putx(0, 3, ['DQD threshold: %d' % (cmd[1] & 0x7)])
 
@@ -219,7 +219,7 @@ class Decoder(srd.Decoder):
         else:
             self.advance_ann(5, 4)
         s = 'one byte' if (cmd[1] & 0x08) else 'two bytes'
-        self.putx(0, 1, ['Synchron length: ' + s])
+        self.putx(0, 1, [f'Synchron length: {s}'])
         if (cmd[1] & 0x08) != (self.last_fifo_and_reset & 0x08):
             self.putx(5, 1, ['Changing', '~'])
         else:
@@ -231,14 +231,14 @@ class Decoder(srd.Decoder):
             fifo_fill = 'After synchron pattern'
         else:
             fifo_fill = 'Never'
-        self.putx(0, 2, ['FIFO fill: %s' % fifo_fill])
+        self.putx(0, 2, [f'FIFO fill: {fifo_fill}'])
         if (cmd[1] & 0x06) != (self.last_fifo_and_reset & 0x06):
             self.putx(5, 2, ['Changing', '~'])
         else:
             self.advance_ann(5, 2)
 
         s = 'non-sensitive' if (cmd[1] & 0x01) else 'sensitive'
-        self.putx(0, 1, ['Reset mode: ' + s])
+        self.putx(0, 1, [f'Reset mode: {s}'])
         if (cmd[1] & 0x01) != (self.last_fifo_and_reset & 0x01):
             self.putx(5, 1, ['Changing', '~'])
         else:
@@ -261,7 +261,7 @@ class Decoder(srd.Decoder):
         self.putx(0, 8, ['AFC command'])
         MODES = ['Off', 'Once', 'During receiving', 'Always']
         mode = (cmd[1] & 0xC0) >> 6
-        self.putx(0, 2, ['Mode: %s' % MODES[mode]])
+        self.putx(0, 2, [f'Mode: {MODES[mode]}'])
         if (cmd[1] & 0xC0) != (self.last_afc & 0xC0):
             self.putx(5, 2, ['Changing', '~'])
         else:
@@ -320,7 +320,7 @@ class Decoder(srd.Decoder):
         self.describe_bits((cmd[1] & 0xC) >> 2, NAMES)
         self.describe_changed_bits((cmd[1] & 0xC) >> 2, (self.last_pll & 0xC) >> 2, NAMES)
         s = '256kbps, high' if (cmd[1] & 0x01) else '86.2kbps, low'
-        self.putx(0, 1, ['Max bit rate: %s noise' % s])
+        self.putx(0, 1, [f'Max bit rate: {s} noise'])
 
         self.advance_ann(5, 1)
         if (cmd[1] & 0x01) != (self.last_pll & 0x01):
@@ -330,7 +330,7 @@ class Decoder(srd.Decoder):
 
     def handle_transmitter_register_cmd(self, cmd, ret):
         self.putx(0, 8, ['Transmitter register command', 'Transmit'])
-        self.putx(0, 8, ['Data: %s' % cmd[1], '%s' % cmd[1]])
+        self.putx(0, 8, [f'Data: {cmd[1]}', f'{cmd[1]}'])
 
     def handle_software_reset_cmd(self, cmd, ret):
         self.putx(0, 16, ['Software reset command'])
@@ -349,7 +349,7 @@ class Decoder(srd.Decoder):
         self.putx(0, 8, ['Low battery detector command'])
         NAMES = ['1', '1.25', '1.66', '2', '2.5', '3.33', '5', '10']
         clock = NAMES[(cmd[1] & 0xE0) >> 5]
-        self.putx(0, 3, ['Clock output: %sMHz' % clock, '%sMHz' % clock])
+        self.putx(0, 3, [f'Clock output: {clock}MHz', f'{clock}MHz'])
         self.advance_ann(0, 1)
         v = 2.25 + (cmd[1] & 0x0F) * 0.1
         self.putx(0, 4, ['Low battery voltage: %1.2fV' % v, '%1.2fV' % v])
@@ -365,10 +365,7 @@ class Decoder(srd.Decoder):
         receiver_enabled = (self.last_power & 0x80) >> 7
 
         if ret[0] & 0x80:
-            if receiver_enabled:
-                s = 'Received data in FIFO'
-            else:
-                s = 'Transmit register ready'
+            s = 'Received data in FIFO' if receiver_enabled else 'Transmit register ready'
             self.putx(5, 1, s)
         else:
             self.advance_ann(5, 1)
@@ -377,10 +374,7 @@ class Decoder(srd.Decoder):
         else:
             self.advance_ann(5, 1)
         if ret[0] & 0x20:
-            if receiver_enabled:
-                s = 'RX FIFO overflow'
-            else:
-                s = 'Transmit register under run'
+            s = 'RX FIFO overflow' if receiver_enabled else 'Transmit register under run'
             self.putx(5, 1, s)
         else:
             self.advance_ann(5, 1)
@@ -463,7 +457,7 @@ class Decoder(srd.Decoder):
         else:
             c = '%02x %02x' % tuple(cmd)
             r = '%02x %02x' % tuple(ret)
-            self.putx(0, 16, ['Unknown command: %s (reply: %s)!' % (c, r)])
+            self.putx(0, 16, [f'Unknown command: {c} (reply: {r})!'])
 
     def decode(self, ss, es, data):
         ptype, mosi, miso = data

@@ -186,32 +186,33 @@ class Decoder(srd.Decoder):
         if bitnum == (self.last_databit + 1):
             self.ss_block = self.samplenum
             if self.fd:
-                if dlc2len(self.dlc) < 16:
-                    self.crc_len = 27 # 17 + SBC + stuff bits
-                else:
-                    self.crc_len = 32 # 21 + SBC + stuff bits
+                self.crc_len = 27 if dlc2len(self.dlc) < 16 else 32
             else:
                 self.crc_len = 15
 
-        # CRC sequence (15 bits, 17 bits or 21 bits)
         elif bitnum == (self.last_databit + self.crc_len):
             if self.fd:
-                if dlc2len(self.dlc) < 16:
-                    crc_type = "CRC-17"
-                else:
-                    crc_type = "CRC-21"
+                crc_type = "CRC-17" if dlc2len(self.dlc) < 16 else "CRC-21"
             else:
                 crc_type = "CRC-15"
 
             x = self.last_databit + 1
             crc_bits = self.bits[x:x + self.crc_len + 1]
             self.crc = bitpack_msb(crc_bits)
-            self.putb([11, ['%s sequence: 0x%04x' % (crc_type, self.crc),
-                            '%s: 0x%04x' % (crc_type, self.crc), '%s' % crc_type]])
+            self.putb(
+                [
+                    11,
+                    [
+                        '%s sequence: 0x%04x' % (crc_type, self.crc),
+                        '%s: 0x%04x' % (crc_type, self.crc),
+                        f'{crc_type}',
+                    ],
+                ]
+            )
+
             if not self.is_valid_crc(crc_bits):
                 self.putb([16, ['CRC is invalid']])
 
-        # CRC delimiter bit (recessive)
         elif bitnum == (self.last_databit + self.crc_len + 1):
             self.putx([12, ['CRC delimiter: %d' % can_rx,
                             'CRC d: %d' % can_rx, 'CRC d']])
@@ -221,30 +222,32 @@ class Decoder(srd.Decoder):
             if self.fd:
                 self.set_nominal_bitrate()
 
-        # ACK slot bit (dominant: ACK, recessive: NACK)
         elif bitnum == (self.last_databit + self.crc_len + 2):
             ack = 'ACK' if can_rx == 0 else 'NACK'
-            self.putx([13, ['ACK slot: %s' % ack, 'ACK s: %s' % ack, 'ACK s']])
+            self.putx([13, [f'ACK slot: {ack}', f'ACK s: {ack}', 'ACK s']])
 
-        # ACK delimiter bit (recessive)
         elif bitnum == (self.last_databit + self.crc_len + 3):
             self.putx([14, ['ACK delimiter: %d' % can_rx,
                             'ACK d: %d' % can_rx, 'ACK d']])
             if can_rx != 1:
                 self.putx([16, ['ACK delimiter must be a recessive bit']])
 
-        # Remember start of EOF (see below).
         elif bitnum == (self.last_databit + self.crc_len + 4):
             self.ss_block = self.samplenum
 
-        # End of frame (EOF), 7 recessive bits
         elif bitnum == (self.last_databit + self.crc_len + 10):
             self.putb([2, ['End of frame', 'EOF', 'E']])
             if self.rawbits[-7:] != [1, 1, 1, 1, 1, 1, 1]:
                 self.putb([16, ['End of frame (EOF) must be 7 recessive bits']])
             self.es_packet = self.samplenum
-            py_data = tuple([self.frame_type, self.fullid, self.rtr_type,
-                self.dlc, self.frame_bytes])
+            py_data = (
+                self.frame_type,
+                self.fullid,
+                self.rtr_type,
+                self.dlc,
+                self.frame_bytes,
+            )
+
             self.putpy(py_data)
             self.reset_variables()
             return True
@@ -258,7 +261,7 @@ class Decoder(srd.Decoder):
         # Has to be sent dominant when FD frame, has to be sent recessive
         # when classic CAN frame.
         if bitnum == 14:
-            self.fd = True if can_rx else False
+            self.fd = bool(can_rx)
             if self.fd:
                 self.putx([7, ['Flexible data format: %d' % can_rx,
                                'FDF: %d' % can_rx, 'FDF']])
@@ -275,8 +278,17 @@ class Decoder(srd.Decoder):
                 # Data frame: dominant, remote frame: recessive
                 # Remote frames do not contain a data field.
                 rtr = 'remote' if self.bits[12] == 1 else 'data'
-                self.put12([8, ['Remote transmission request: %s frame' % rtr,
-                                'RTR: %s frame' % rtr, 'RTR']])
+                self.put12(
+                    [
+                        8,
+                        [
+                            f'Remote transmission request: {rtr} frame',
+                            f'RTR: {rtr} frame',
+                            'RTR',
+                        ],
+                    ]
+                )
+
                 self.rtr_type = rtr
                 self.dlc_start = 15
 
@@ -334,17 +346,25 @@ class Decoder(srd.Decoder):
             self.fd = False
             self.dlc_start = 35
 
-        # Bits 14-31: Extended identifier (EID[17..0])
         elif bitnum == 31:
             self.eid = bitpack_msb(self.bits[14:])
             s = '%d (0x%x)' % (self.eid, self.eid)
-            self.putb([4, ['Extended Identifier: %s' % s,
-                           'Extended ID: %s' % s, 'Extended ID', 'EID']])
+            self.putb(
+                [
+                    4,
+                    [
+                        f'Extended Identifier: {s}',
+                        f'Extended ID: {s}',
+                        'Extended ID',
+                        'EID',
+                    ],
+                ]
+            )
+
 
             self.fullid = self.ident << 18 | self.eid
             s = '%d (0x%x)' % (self.fullid, self.fullid)
-            self.putb([5, ['Full Identifier: %s' % s, 'Full ID: %s' % s,
-                           'Full ID', 'FID']])
+            self.putb([5, [f'Full Identifier: {s}', f'Full ID: {s}', 'Full ID', 'FID']])
 
             # Bit 12: Substitute remote request (SRR) bit
             self.put12([9, ['Substitute remote request: %d' % self.bits[12],
@@ -361,13 +381,21 @@ class Decoder(srd.Decoder):
 
             if not self.fd:
                 rtr = 'remote' if can_rx == 1 else 'data'
-                self.putx([8, ['Remote transmission request: %s frame' % rtr,
-                              'RTR: %s frame' % rtr, 'RTR']])
+                self.putx(
+                    [
+                        8,
+                        [
+                            f'Remote transmission request: {rtr} frame',
+                            f'RTR: {rtr} frame',
+                            'RTR',
+                        ],
+                    ]
+                )
+
                 self.rtr_type = rtr
 
-        # Bit 33: RB1 (reserved bit)
         elif bitnum == 33:
-            self.fd = True if can_rx else False
+            self.fd = bool(can_rx)
             if self.fd:
                 self.dlc_start = 37
                 self.putx([7, ['Flexible data format: %d' % can_rx,
@@ -378,7 +406,6 @@ class Decoder(srd.Decoder):
                 self.putx([7, ['Reserved bit 1: %d' % can_rx,
                                'RB1: %d' % can_rx, 'RB1']])
 
-        # Bit 34: RB0 (reserved bit)
         elif bitnum == 34:
             self.putx([7, ['Reserved bit 0: %d' % can_rx,
                            'RB0: %d' % can_rx, 'RB0']])
@@ -391,23 +418,18 @@ class Decoder(srd.Decoder):
             self.putx([7, ['Error state indicator: %d' % can_rx,
                            'ESI: %d' % can_rx, 'ESI']])
 
-        # Remember start of DLC (see below).
         elif bitnum == self.dlc_start:
             self.ss_block = self.samplenum
 
-        # Bits 35-38: Data length code (DLC), in number of bytes (0-8).
         elif bitnum == self.dlc_start + 3:
             self.dlc = bitpack_msb(self.bits[self.dlc_start:self.dlc_start + 4])
             self.putb([10, ['Data length code: %d' % self.dlc,
                             'DLC: %d' % self.dlc, 'DLC']])
             self.last_databit = self.dlc_start + 3 + (dlc2len(self.dlc) * 8)
 
-        # Remember all databyte bits, except the very last one.
         elif bitnum in range(self.dlc_start + 4, self.last_databit):
             self.ss_databytebits.append(self.samplenum)
 
-        # Bits 39-X: Data field (0-8 bytes, depending on DLC)
-        # The bits within a data byte are transferred MSB-first.
         elif bitnum == self.last_databit:
             self.ss_databytebits.append(self.samplenum) # Last databyte bit.
             for i in range(dlc2len(self.dlc)):
@@ -432,11 +454,18 @@ class Decoder(srd.Decoder):
         # Get the index of the current CAN frame bit (without stuff bits).
         bitnum = len(self.bits) - 1
 
-        if self.fd and can_rx:
-            if bitnum == 16 and self.frame_type == 'standard' \
-                    or bitnum == 35 and self.frame_type == 'extended':
-                self.dom_edge_seen(force=True)
-                self.set_fast_bitrate()
+        if (
+            self.fd
+            and can_rx
+            and (
+                bitnum == 16
+                and self.frame_type == 'standard'
+                or bitnum == 35
+                and self.frame_type == 'extended'
+            )
+        ):
+            self.dom_edge_seen(force=True)
+            self.set_fast_bitrate()
 
         # If this is a stuff bit, remove it from self.bits and ignore it.
         if self.is_stuff_bit():
@@ -453,35 +482,37 @@ class Decoder(srd.Decoder):
             if can_rx != 0:
                 self.putx([16, ['Start of frame (SOF) must be a dominant bit']])
 
-        # Remember start of ID (see below).
         elif bitnum == 1:
             self.ss_block = self.samplenum
 
-        # Bits 1-11: Identifier (ID[10..0])
-        # The bits ID[10..4] must NOT be all recessive.
         elif bitnum == 11:
             # BEWARE! Don't clobber the decoder's .id field which is
             # part of its boiler plate!
             self.ident = bitpack_msb(self.bits[1:])
             self.fullid = self.ident
             s = '%d (0x%x)' % (self.ident, self.ident),
-            self.putb([3, ['Identifier: %s' % s, 'ID: %s' % s, 'ID']])
+            self.putb([3, [f'Identifier: {s}', f'ID: {s}', 'ID']])
             if (self.ident & 0x7f0) == 0x7f0:
                 self.putb([16, ['Identifier bits 10..4 must not be all recessive']])
 
-        # RTR or SRR bit, depending on frame type (gets handled later).
         elif bitnum == 12:
             # self.putx([0, ['RTR/SRR: %d' % can_rx]]) # Debug only.
             self.ss_bit12 = self.samplenum
 
-        # Bit 13: Identifier extension (IDE) bit
-        # Standard frame: dominant, extended frame: recessive
         elif bitnum == 13:
             ide = self.frame_type = 'standard' if can_rx == 0 else 'extended'
-            self.putx([6, ['Identifier extension bit: %s frame' % ide,
-                           'IDE: %s frame' % ide, 'IDE']])
+            self.putx(
+                [
+                    6,
+                    [
+                        f'Identifier extension bit: {ide} frame',
+                        f'IDE: {ide} frame',
+                        'IDE',
+                    ],
+                ]
+            )
 
-        # Bits 14-X: Frame-type dependent, passed to the resp. handlers.
+
         elif bitnum >= 14:
             if self.frame_type == 'standard':
                 done = self.decode_standard_frame(can_rx, bitnum)

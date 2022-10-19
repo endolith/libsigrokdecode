@@ -63,9 +63,7 @@ class Decoder(srd.Decoder):
 
     def put_address(self, data):
         # Get address (MSb first).
-        a = 0
-        for b in range(len(data)):
-            a += (data[b].si << (len(data) - b - 1))
+        a = sum((data[b].si << (len(data) - b - 1)) for b in range(len(data)))
         self.put(data[0].ss, data[-1].es, self.out_ann,
                  [0, ['Address: 0x%04x' % a, 'Addr: 0x%04x' % a, '0x%04x' % a]])
         self.put(data[0].ss, data[-1].es, self.out_binary, [0, bytes([a])])
@@ -86,8 +84,13 @@ class Decoder(srd.Decoder):
                     word_str = chr(c) + word_str
                 else:
                     word_str = '[{:02X}]'.format(c) + word_str
-            self.put(data[0].ss, data[-1].es,
-                     self.out_ann, [idx, ['Data: %s' % word_str, '%s' % word_str]])
+            self.put(
+                data[0].ss,
+                data[-1].es,
+                self.out_ann,
+                [idx, [f'Data: {word_str}', f'{word_str}']],
+            )
+
         else:
             self.put(data[0].ss, data[-1].es,
                      self.out_ann, [idx, ['Data: 0x%04x' % word, '0x%04x' % word]])

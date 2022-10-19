@@ -80,10 +80,14 @@ class Decoder(srd.Decoder):
         if ptype == 'CS-CHANGE':
             # If we transition high mid-stream, toss out our data and restart.
             cs_old, cs_new = data[1:]
-            if cs_old is not None and cs_old == 0 and cs_new == 1:
-                if len(self.mosi_bytes) not in [0, 2]:
-                    self.put_warn([self.ss_cmd, es], 'Misplaced CS#!')
-                    self.mosi_bytes = []
+            if (
+                cs_old is not None
+                and cs_old == 0
+                and cs_new == 1
+                and len(self.mosi_bytes) not in [0, 2]
+            ):
+                self.put_warn([self.ss_cmd, es], 'Misplaced CS#!')
+                self.mosi_bytes = []
             return
 
         # Don't care about anything else.

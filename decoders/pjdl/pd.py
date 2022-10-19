@@ -247,10 +247,10 @@ class Decoder(srd.Decoder):
         if len(self.symbols) < len(want_items):
             return False
         sym_off = len(self.symbols) - len(want_items)
-        for idx, want_item in enumerate(want_items):
-            if self.symbols[sym_off + idx][2] != want_item:
-                return False
-        return True
+        return all(
+            self.symbols[sym_off + idx][2] == want_item
+            for idx, want_item in enumerate(want_items)
+        )
 
     def symbols_collapse(self, count, symbol, data = None, squeeze = None):
         if self.symbols is None:
@@ -434,9 +434,7 @@ class Decoder(srd.Decoder):
             return 2
         if span in range(*self.data_bit_3_range):
             return 3
-        if span in range(*self.data_bit_4_range):
-            return 4
-        return False
+        return 4 if span in range(*self.data_bit_4_range) else False
 
     def span_is_short(self, span):
         return span in range(*self.short_data_range)
@@ -652,7 +650,7 @@ class Decoder(srd.Decoder):
             # improved accuracy, only round late to integers when needed.
             bit_field = []
             bit_ss = self.data_fall_time + self.data_width
-            for bit_idx in range(8):
+            for _ in range(8):
                 bit_es = bit_ss + self.data_width
                 bit_snum = (bit_es + bit_ss) / 2
                 if bit_snum > self.samplenum:

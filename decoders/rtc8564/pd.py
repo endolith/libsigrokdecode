@@ -21,10 +21,7 @@ import sigrokdecode as srd
 from common.srdhelper import bcd2int
 
 def reg_list():
-    l = []
-    for i in range(8 + 1):
-        l.append(('reg-0x%02x' % i, 'Register 0x%02x' % i))
-
+    l = [('reg-0x%02x' % i, 'Register 0x%02x' % i) for i in range(8 + 1)]
     return tuple(l)
 
 class Decoder(srd.Decoder):
@@ -93,17 +90,17 @@ class Decoder(srd.Decoder):
 
         s = 'repeated' if ti_tp else 'single-shot'
         ann += 'TI/TP = %d: %s operation upon fixed-cycle timer interrupt '\
-               'events\n' % (ti_tp, s)
+                   'events\n' % (ti_tp, s)
         s = '' if af else 'no '
         ann += 'AF = %d: %salarm interrupt detected\n' % (af, s)
         s = '' if tf else 'no '
         ann += 'TF = %d: %sfixed-cycle timer interrupt detected\n' % (tf, s)
         s = 'enabled' if aie else 'prohibited'
         ann += 'AIE = %d: INT# pin output %s when an alarm interrupt '\
-               'occurs\n' % (aie, s)
+                   'occurs\n' % (aie, s)
         s = 'enabled' if tie else 'prohibited'
         ann += 'TIE = %d: INT# pin output %s when a fixed-cycle interrupt '\
-               'event occurs\n' % (tie, s)
+                   'event occurs\n' % (tie, s)
 
         self.putx([1, [ann]])
 
@@ -210,45 +207,57 @@ class Decoder(srd.Decoder):
             # Otherwise: Get data bytes until a STOP condition occurs.
             if cmd == 'DATA WRITE':
                 r, s = self.reg, '%02X: %02X' % (self.reg, databyte)
-                self.putx([15, ['Write register %s' % s, 'Write reg %s' % s,
-                                'WR %s' % s, 'WR', 'W']])
+                self.putx(
+                    [
+                        15,
+                        [
+                            f'Write register {s}',
+                            f'Write reg {s}',
+                            f'WR {s}',
+                            'WR',
+                            'W',
+                        ],
+                    ]
+                )
+
                 handle_reg = getattr(self, 'handle_reg_0x%02x' % self.reg)
                 handle_reg(databyte)
                 self.reg += 1
-                # TODO: Check for NACK!
+                        # TODO: Check for NACK!
             elif cmd == 'STOP':
                 # TODO: Handle read/write of only parts of these items.
                 d = '%02d.%02d.%02d %02d:%02d:%02d' % (self.days, self.months,
                     self.years, self.hours, self.minutes, self.seconds)
-                self.put(self.ss_block, es, self.out_ann,
-                         [9, ['Write date/time: %s' % d, 'Write: %s' % d,
-                              'W: %s' % d]])
+                self.put(
+                    self.ss_block,
+                    es,
+                    self.out_ann,
+                    [9, [f'Write date/time: {d}', f'Write: {d}', f'W: {d}']],
+                )
+
                 self.state = 'IDLE'
-            else:
-                pass # TODO
         elif self.state == 'READ RTC REGS':
             # Wait for an address read operation.
             # TODO: We should only handle packets to the RTC slave (0xa2/0xa3).
             if cmd == 'ADDRESS READ':
                 self.state = 'READ RTC REGS2'
                 return
-            else:
-                pass # TODO
         elif self.state == 'READ RTC REGS2':
             if cmd == 'DATA READ':
                 r, s = self.reg, '%02X: %02X' % (self.reg, databyte)
-                self.putx([15, ['Read register %s' % s, 'Read reg %s' % s,
-                                'RR %s' % s, 'RR', 'R']])
+                self.putx([15, [f'Read register {s}', f'Read reg {s}', f'RR {s}', 'RR', 'R']])
                 handle_reg = getattr(self, 'handle_reg_0x%02x' % self.reg)
                 handle_reg(databyte)
                 self.reg += 1
-                # TODO: Check for NACK!
+                        # TODO: Check for NACK!
             elif cmd == 'STOP':
                 d = '%02d.%02d.%02d %02d:%02d:%02d' % (self.days, self.months,
                     self.years, self.hours, self.minutes, self.seconds)
-                self.put(self.ss_block, es, self.out_ann,
-                         [10, ['Read date/time: %s' % d, 'Read: %s' % d,
-                               'R: %s' % d]])
+                self.put(
+                    self.ss_block,
+                    es,
+                    self.out_ann,
+                    [10, [f'Read date/time: {d}', f'Read: {d}', f'R: {d}']],
+                )
+
                 self.state = 'IDLE'
-            else:
-                pass # TODO?

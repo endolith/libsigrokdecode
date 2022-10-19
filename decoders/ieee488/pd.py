@@ -91,9 +91,7 @@ class ChannelError(Exception):
     pass
 
 def _format_ann_texts(fmts, **args):
-    if not fmts:
-        return None
-    return [fmt.format(**args) for fmt in fmts]
+    return [fmt.format(**args) for fmt in fmts] if fmts else None
 
 _cmd_table = {
     # Command codes in the 0x00-0x1f range.
@@ -117,7 +115,7 @@ _cmd_table = {
 def _is_command(b):
     # Returns a tuple of booleans (or None when not applicable) whether
     # the raw GPIB byte is: a command, an un-listen, an un-talk command.
-    if b in range(0x00, 0x20):
+    if b in range(0x20):
         return True, None, None
     if b in range(0x20, 0x40) and (b & 0x1f) == 31:
         return True, True, False
@@ -126,24 +124,16 @@ def _is_command(b):
     return False, None, None
 
 def _is_listen_addr(b):
-    if b in range(0x20, 0x40):
-        return b & 0x1f
-    return None
+    return b & 0x1f if b in range(0x20, 0x40) else None
 
 def _is_talk_addr(b):
-    if b in range(0x40, 0x60):
-        return b & 0x1f
-    return None
+    return b & 0x1f if b in range(0x40, 0x60) else None
 
 def _is_secondary_addr(b):
-    if b in range(0x60, 0x80):
-        return b & 0x1f
-    return None
+    return b & 0x1f if b in range(0x60, 0x80) else None
 
 def _is_msb_set(b):
-    if b & 0x80:
-        return b
-    return None
+    return b if b & 0x80 else None
 
 def _get_raw_byte(b, atn):
     # "Decorate" raw byte values for stacked decoders.
@@ -157,9 +147,11 @@ def _get_command_texts(b):
     known = fmts is not None
     if not fmts:
         fmts = _cmd_table.get(None, None)
-    if not fmts:
-        return known, None
-    return known, _format_ann_texts(fmts, cmd = b, cmd_ord = ord('0') + b)
+    return (
+        (known, _format_ann_texts(fmts, cmd=b, cmd_ord=ord('0') + b))
+        if fmts
+        else (known, None)
+    )
 
 def _get_address_texts(b):
     laddr = _is_listen_addr(b)
@@ -439,14 +431,10 @@ class Decoder(srd.Decoder):
             # device. Participants and their location in the DIO pattern
             # is configurable. Leave the interpretation to upper layers.
             bits = [i for i, b in enumerate(dio) if b]
-            bits_text = ' '.join(['{}'.format(i + 1) for i in bits])
-            dios = ['DIO{}'.format(i + 1) for i in bits]
+            bits_text = ' '.join([f'{i + 1}' for i in bits])
+            dios = [f'DIO{i + 1}' for i in bits]
             dios_text = ' '.join(dios or ['-'])
-            text = [
-                'PPOLL {}'.format(dios_text),
-                'PP {}'.format(bits_text),
-                'PP',
-            ]
+            text = [f'PPOLL {dios_text}', f'PP {bits_text}', 'PP']
             self.emit_data_ann(ss, es, ANN_PP, text)
             self.putpy(ss, es, 'PPOLL', None, bits)
             # Cease collecting DIO state.
@@ -513,8 +501,7 @@ class Decoder(srd.Decoder):
         _iec_disk_range = range(8, 16)
         if addr is not None:
             self.last_iec_addr = addr
-            name = _iec_addr_names.get(addr, None)
-            if name:
+            if name := _iec_addr_names.get(addr, None):
                 self.emit_data_ann(ss, es, ANN_IEC_PERIPH, [name])
         addr = self.last_iec_addr # Simplify subsequent logic.
         if sec is not None:
@@ -524,18 +511,16 @@ class Decoder(srd.Decoder):
             subcmd, channel = sec & 0xf0, sec & 0x0f
             channel_ord = ord('0') + channel
             if addr is not None and addr in _iec_disk_range:
-                subcmd_fmts = {
+                if subcmd_fmts := {
                     0x60: ['Reopen {ch:d}', 'Re {ch:d}', 'R{ch_ord:c}'],
-                    0xe0: ['Close {ch:d}', 'Cl {ch:d}', 'C{ch_ord:c}'],
-                    0xf0: ['Open {ch:d}', 'Op {ch:d}', 'O{ch_ord:c}'],
-                }.get(subcmd, None)
-                if subcmd_fmts:
+                    0xE0: ['Close {ch:d}', 'Cl {ch:d}', 'C{ch_ord:c}'],
+                    0xF0: ['Open {ch:d}', 'Op {ch:d}', 'O{ch_ord:c}'],
+                }.get(subcmd, None):
                     texts = _format_ann_texts(subcmd_fmts, ch = channel, ch_ord = channel_ord)
                     self.emit_data_ann(ss, es, ANN_IEC_PERIPH, texts)
         sec = self.last_iec_sec # Simplify subsequent logic.
-        if data is not None:
-            if addr is None or sec is None:
-                return
+        if data is not None and (addr is None or sec is None):
+            return
             # TODO Process data depending on peripheral type and channel?
 
     def handle_data_byte(self):

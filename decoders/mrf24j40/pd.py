@@ -89,15 +89,20 @@ class Decoder(srd.Decoder):
             if self.framecache[rxtx] == []:
                 continue
             bit0 = self.mosi_bytes[1] & (1 << 0)
-            if rxtx == TX and not (reg_desc == 'TXNCON' and bit0 == 1):
+            if rxtx == TX and (reg_desc != 'TXNCON' or bit0 != 1):
                 continue
-            if rxtx == RX and not (reg_desc == 'RXFLUSH' and bit0 == 1):
+            if rxtx == RX and (reg_desc != 'RXFLUSH' or bit0 != 1):
                 continue
             idx = 5 if rxtx == TX else 6
             xmitdir = 'TX' if rxtx == TX else 'RX'
             frame = ' '.join(['%02X' % b for b in self.framecache[rxtx]])
-            self.put(self.ss_frame[rxtx], self.es_frame[rxtx], self.out_ann,
-                [idx, ['%s frame: %s' % (xmitdir, frame)]])
+            self.put(
+                self.ss_frame[rxtx],
+                self.es_frame[rxtx],
+                self.out_ann,
+                [idx, [f'{xmitdir} frame: {frame}']],
+            )
+
             self.framecache[rxtx] = []
         if write:
             self.putx([1, ['%s: %#x' % (reg_desc, self.mosi_bytes[1])]])
@@ -155,10 +160,14 @@ class Decoder(srd.Decoder):
         if ptype == 'CS-CHANGE':
             # If we transition high mid-stream, toss out our data and restart.
             cs_old, cs_new = data[1:]
-            if cs_old is not None and cs_old == 0 and cs_new == 1:
-                if len(self.mosi_bytes) not in (0, 2, 3):
-                    self.putw([self.ss_cmd, es], 'Misplaced CS!')
-                    self.reset_data()
+            if (
+                cs_old is not None
+                and cs_old == 0
+                and cs_new == 1
+                and len(self.mosi_bytes) not in (0, 2, 3)
+            ):
+                self.putw([self.ss_cmd, es], 'Misplaced CS!')
+                self.reset_data()
             return
 
         # Don't care about anything else.

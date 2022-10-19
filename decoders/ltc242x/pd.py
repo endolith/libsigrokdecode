@@ -57,10 +57,7 @@ class Decoder(srd.Decoder):
         input_voltage = data & 0x3FFFFF
         input_voltage = -(2**21 - input_voltage)
         input_voltage = (input_voltage / 0xfffff) * self.options['vref']
-        ann = []
-        for format in input_voltage_format:
-            ann.append(format % input_voltage)
-
+        ann = [format % input_voltage for format in input_voltage_format]
         channel = (data & (1 << 22)) >> 22
         self.put(self.ss, self.es, self.out_ann, [channel, ann])
 

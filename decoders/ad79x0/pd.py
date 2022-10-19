@@ -79,9 +79,7 @@ class Decoder(srd.Decoder):
         self.put(pos[0], pos[1], self.out_ann, [2, validation[msg]])
 
     def put_data(self, pos, input_voltage):
-        ann = []
-        for format in input_voltage_format:
-            ann.append(format % input_voltage)
+        ann = [format % input_voltage for format in input_voltage_format]
         self.put(pos[0], pos[1], self.out_ann, [1, ann])
 
     def put_mode(self, pos, msg):
@@ -110,7 +108,7 @@ class Decoder(srd.Decoder):
                             self.put_validation([self.start_sample, es], 'incomplete')
                         vin = (self.data / ((2**12) - 1)) * self.options['vref']
                         self.put_data([self.start_sample, es], vin)
-                elif nb_bits < 10:
+                else:
                     self.put_mode([self.start_sample, es], 1)
                     self.previous_state = 1
                     self.put_validation([self.start_sample, es], 'invalid')

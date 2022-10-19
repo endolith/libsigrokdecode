@@ -122,7 +122,10 @@ class Decoder(srd.Decoder):
         if not lib_rate:
             raise LibraryError('Cannot determine IRMP library\'s samplerate.')
         if self.samplerate % lib_rate:
-            raise SamplerateError('Capture samplerate must be multiple of library samplerate ({})'.format(lib_rate))
+            raise SamplerateError(
+                f'Capture samplerate must be multiple of library samplerate ({lib_rate})'
+            )
+
 
         self.rate_factor = int(self.samplerate / lib_rate)
         active = 0 if self.options['polarity'] == 'active-low' else 1

@@ -99,7 +99,7 @@ class Decoder(srd.Decoder):
 
     def load_objdump(self):
         '''Parse disassembly obtained from objdump into a lookup tables'''
-        if not (self.options['objdump'] and self.options['elffile']):
+        if not self.options['objdump'] or not self.options['elffile']:
             return
 
         opts = [self.options['objdump']]
@@ -121,19 +121,14 @@ class Decoder(srd.Decoder):
         prev_func = ''
 
         for line in disasm.split('\n'):
-            m = instpat.match(line)
-            if m:
-                addr = int(m.group(1), 16)
+            if m := instpat.match(line):
+                addr = int(m[1], 16)
                 self.file_lookup[addr] = prev_file
                 self.func_lookup[addr] = prev_func
-            else:
-                m = funcpat.match(line)
-                if m:
-                    prev_func = m.group(1)
-                else:
-                    m = filepat.match(line)
-                    if m:
-                        prev_file = m.group(1)
+            elif m := funcpat.match(line):
+                prev_func = m[1]
+            elif m := filepat.match(line):
+                prev_file = m[1]
 
     def get_packet_type(self, byte):
         '''Identify packet type based on its first byte.
@@ -167,10 +162,7 @@ class Decoder(srd.Decoder):
                 ann_idx = 9
             self.put(start, self.startsample, self.out_ann, [ann_idx, [mode]])
 
-        if new_mode is None:
-            self.current_mode = None
-        else:
-            self.current_mode = (self.startsample, new_mode)
+        self.current_mode = None if new_mode is None else (self.startsample, new_mode)
 
     def location_change(self, pc):
         new_loc = self.file_lookup.get(pc)
@@ -186,7 +178,7 @@ class Decoder(srd.Decoder):
 
     def fallback(self, buf):
         ptype = self.get_packet_type(buf[0])
-        return [0, [('Unhandled %s: ' % ptype) + ' '.join(['%02x' % b for b in buf])]]
+        return [0, [f'Unhandled {ptype}: ' + ' '.join(['%02x' % b for b in buf])]]
 
     def handle_overflow(self, buf):
         return [0, ['Overflow']]
@@ -219,13 +211,13 @@ class Decoder(srd.Decoder):
             excstr = ARM_EXCEPTIONS.get(excnum, 'IRQ %d' % (excnum - 16))
             if event == 1:
                 self.mode_change(excstr)
-                return [5, ['Enter: ' + excstr, 'E ' + excstr]]
+                return [5, [f'Enter: {excstr}', f'E {excstr}']]
             elif event == 2:
                 self.mode_change(None)
-                return [5, ['Exit: ' + excstr, 'X ' + excstr]]
+                return [5, [f'Exit: {excstr}', f'X {excstr}']]
             elif event == 3:
                 self.mode_change(excstr)
-                return [5, ['Resume: ' + excstr, 'R ' + excstr]]
+                return [5, [f'Resume: {excstr}', f'R {excstr}']]
         elif pid == 2:
             pc = buf[1] | (buf[2] << 8) | (buf[3] << 16) | (buf[4] << 24)
             self.location_change(pc)
@@ -361,8 +353,8 @@ class Decoder(srd.Decoder):
 
         # See if it is ready to be decoded.
         ptype = self.get_packet_type(self.buf[0])
-        if hasattr(self, 'handle_' + ptype):
-            func = getattr(self, 'handle_' + ptype)
+        if hasattr(self, f'handle_{ptype}'):
+            func = getattr(self, f'handle_{ptype}')
             data = func(self.buf)
         else:
             data = self.fallback(self.buf)

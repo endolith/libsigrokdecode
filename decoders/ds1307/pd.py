@@ -47,13 +47,15 @@ rates = {
 DS1307_I2C_ADDRESS = 0x68
 
 def regs_and_bits():
-    l = [('reg_' + r.lower(), r + ' register') for r in regs]
-    l += [('bit_' + re.sub('\/| ', '_', b).lower(), b + ' bit') for b in bits]
+    l = [(f'reg_{r.lower()}', f'{r} register') for r in regs]
+    l += [('bit_' + re.sub('\/| ', '_', b).lower(), f'{b} bit') for b in bits]
     return tuple(l)
 
-a = ['REG_' + r.upper() for r in regs] + \
-    ['BIT_' + re.sub('\/| ', '_', b).upper() for b in bits] + \
-    ['READ_DATE_TIME', 'WRITE_DATE_TIME', 'READ_REG', 'WRITE_REG', 'WARNING']
+a = (
+    [f'REG_{r.upper()}' for r in regs]
+    + ['BIT_' + re.sub('\/| ', '_', b).upper() for b in bits]
+) + ['READ_DATE_TIME', 'WRITE_DATE_TIME', 'READ_REG', 'WRITE_REG', 'WARNING']
+
 Ann = SrdIntEnum.from_list('Ann', a)
 
 class Decoder(srd.Decoder):
@@ -125,7 +127,7 @@ class Decoder(srd.Decoder):
     def handle_reg_0x02(self, b): # Hours (1-12+AM/PM or 0-23)
         self.putd(7, 0, [Ann.REG_HOURS, ['Hours', 'H']])
         self.putr(7)
-        ampm_mode = True if (b & (1 << 6)) else False
+        ampm_mode = bool(b & (1 << 6))
         if ampm_mode:
             self.putd(6, 6, [Ann.BIT_12_24_HOURS, ['12-hour mode', '12h mode', '12h']])
             a = 'PM' if (b & (1 << 5)) else 'AM'
@@ -143,7 +145,7 @@ class Decoder(srd.Decoder):
             self.putr(i)
         w = self.days = bcd2int(b & 0x07)
         ws = days_of_week[self.days - 1]
-        self.putd(2, 0, [Ann.BIT_DAY, ['Weekday: %s' % ws, 'WD: %s' % ws, 'WD', 'W']])
+        self.putd(2, 0, [Ann.BIT_DAY, [f'Weekday: {ws}', f'WD: {ws}', 'WD', 'W']])
 
     def handle_reg_0x04(self, b): # Date (1-31)
         self.putd(7, 0, [Ann.REG_DATE, ['Date', 'D']])
@@ -175,11 +177,37 @@ class Decoder(srd.Decoder):
         r = rates[b & 0x03]
         self.putd(7, 7, [Ann.BIT_OUT, ['Output control: %d' % o,
             'OUT: %d' % o, 'O: %d' % o, 'O']])
-        self.putd(4, 4, [Ann.BIT_SQWE, ['Square wave output: %sabled' % s2,
-            'SQWE: %sabled' % s2, 'SQWE: %d' % s, 'S: %d' % s, 'S']])
-        self.putd(1, 0, [Ann.BIT_RS, ['Square wave output rate: %s' % r,
-            'Square wave rate: %s' % r, 'SQW rate: %s' % r, 'Rate: %s' % r,
-            'RS: %s' % s, 'RS', 'R']])
+        self.putd(
+            4,
+            4,
+            [
+                Ann.BIT_SQWE,
+                [
+                    f'Square wave output: {s2}abled',
+                    f'SQWE: {s2}abled',
+                    'SQWE: %d' % s,
+                    'S: %d' % s,
+                    'S',
+                ],
+            ],
+        )
+
+        self.putd(
+            1,
+            0,
+            [
+                Ann.BIT_RS,
+                [
+                    f'Square wave output rate: {r}',
+                    f'Square wave rate: {r}',
+                    f'SQW rate: {r}',
+                    f'Rate: {r}',
+                    f'RS: {s}',
+                    'RS',
+                    'R',
+                ],
+            ],
+        )
 
     def handle_reg_0x3f(self, b): # RAM (bytes 0x08-0x3f)
         self.putd(7, 0, [Ann.REG_RAM, ['RAM', 'R']])
@@ -190,8 +218,7 @@ class Decoder(srd.Decoder):
         d = '%s, %02d.%02d.%4d %02d:%02d:%02d' % (
             days_of_week[self.days - 1], self.date, self.months,
             self.years, self.hours, self.minutes, self.seconds)
-        self.put(self.ss_block, self.es, self.out_ann,
-                 [cls, ['%s date/time: %s' % (rw, d)]])
+        self.put(self.ss_block, self.es, self.out_ann, [cls, [f'{rw} date/time: {d}']])
 
     def handle_reg(self, b):
         r = self.reg if self.reg < 8 else 0x3f

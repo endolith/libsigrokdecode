@@ -53,9 +53,7 @@ class IrmpLibrary:
 
         if platform.uname()[0] == 'Linux':
             return 'libirmp.so'
-        if platform.uname()[0] == 'Darwin':
-            return 'libirmp.dylib'
-        return 'irmp.dll'
+        return 'libirmp.dylib' if platform.uname()[0] == 'Darwin' else 'irmp.dll'
 
     def _library_setup_api(self):
         '''
@@ -85,10 +83,6 @@ class IrmpLibrary:
 
         self._lib.irmp_add_one_sample.restype = ctypes.c_int
         self._lib.irmp_add_one_sample.argtypes = [ ctypes.c_int, ]
-
-        if False:
-            self._lib.irmp_detect_buffer.restype = self.ResultData
-            self._lib.irmp_detect_buffer.argtypes = [ ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t, ]
 
         self._lib.irmp_get_result_data.restype = ctypes.c_int
         self._lib.irmp_get_result_data.argtypes = [ ctypes.POINTER(self.ResultData), ]
@@ -154,15 +148,17 @@ class IrmpLibrary:
         return True
 
     def get_result_data(self):
-        if not self._data:
-            return None
-        return {
-            'proto_nr': self._data.protocol,
-            'proto_name': self._data.protocol_name.decode('UTF-8', 'ignore'),
-            'address': self._data.address,
-            'command': self._data.command,
-            'repeat': bool(self._data.flags & self.FLAG_REPETITION),
-            'release': bool(self._data.flags & self.FLAG_RELEASE),
-            'start': self._data.start_sample,
-            'end': self._data.end_sample,
-        }
+        return (
+            {
+                'proto_nr': self._data.protocol,
+                'proto_name': self._data.protocol_name.decode('UTF-8', 'ignore'),
+                'address': self._data.address,
+                'command': self._data.command,
+                'repeat': bool(self._data.flags & self.FLAG_REPETITION),
+                'release': bool(self._data.flags & self.FLAG_RELEASE),
+                'start': self._data.start_sample,
+                'end': self._data.end_sample,
+            }
+            if self._data
+            else None
+        )

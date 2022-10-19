@@ -144,7 +144,7 @@ class Decoder(srd.Decoder):
 
     def get_decimal_number(self, bits, start_index, stop_index):
         number = 0
-        interval = range(start_index, stop_index + 1, 1)
+        interval = range(start_index, stop_index + 1)
         for index, offset in zip(interval, range(len(interval))):
             bit = bits[index]
             number = number | (bit << offset)
@@ -353,22 +353,21 @@ class Decoder(srd.Decoder):
 
     def get_bit(self, channel):
         if (channel == Channel.MOSI and self.mosi is None) or \
-                (channel == Channel.MISO and self.miso is None):
+                    (channel == Channel.MISO and self.miso is None):
             raise Exception('No available data')
 
         mosi_bit, miso_bit = 0, 0
         if self.miso is not None:
             if len(self.mosi) < 0:
                 raise Exception('No available data')
-            miso_bit = self.miso.pop(0)
+            else:
+                miso_bit = self.miso.pop(0)
         if self.miso is not None:
             if len(self.miso) < 0:
                 raise Exception('No available data')
             mosi_bit = self.mosi.pop(0)
 
-        if channel == Channel.MOSI:
-            return mosi_bit
-        return miso_bit
+        return mosi_bit if channel == Channel.MOSI else miso_bit
 
     def decode(self, ss, es, data):
         ptype = data[0]
@@ -404,7 +403,7 @@ class Decoder(srd.Decoder):
                 self.address = 0
                 start_sample = self.mosi[0][1]
                 addr_bit = []
-                for i in range(6):
+                for _ in range(6):
                     addr_bit = self.get_bit(Channel.MOSI)
                     self.address |= addr_bit[0]
                     self.address <<= 1
@@ -425,29 +424,28 @@ class Decoder(srd.Decoder):
 
                 if len(self.reg) < 8:
                     return
+                reg_value = 0
+                reg_bit = []
+                for offset in range(7, -1, -1):
+                    reg_bit = self.reg.pop(0)
+
+                    mask = reg_bit[0] << offset
+                    reg_value |= mask
+
+                if self.address < 0x00 or self.address > 0x39:
+                    return
+
+                if self.address in [0x32, 0x34, 0x36]:
+                    self.start_index = self.ss
+
+                if 0x1D > self.address >= 0x00:
+                    self.put(self.ss, reg_bit[2], self.out_ann, [Ann.REG_ADDRESS, [str(self.address)]])
+                    self.put(self.ss, reg_bit[2], self.out_ann, [Ann.REG_DATA, [str(reg_value)]])
                 else:
-                    reg_value = 0
-                    reg_bit = []
-                    for offset in range(7, -1, -1):
-                        reg_bit = self.reg.pop(0)
+                    self.put(self.ss, reg_bit[2], self.out_ann, [Ann.REG_ADDRESS, registers[self.address]])
+                    handle_reg = getattr(self, 'handle_reg_0x%02x' % self.address)
+                    handle_reg(reg_value)
 
-                        mask = reg_bit[0] << offset
-                        reg_value |= mask
-
-                    if self.address < 0x00 or self.address > 0x39:
-                        return
-
-                    if self.address in [0x32, 0x34, 0x36]:
-                        self.start_index = self.ss
-
-                    if 0x1D > self.address >= 0x00:
-                        self.put(self.ss, reg_bit[2], self.out_ann, [Ann.REG_ADDRESS, [str(self.address)]])
-                        self.put(self.ss, reg_bit[2], self.out_ann, [Ann.REG_DATA, [str(reg_value)]])
-                    else:
-                        self.put(self.ss, reg_bit[2], self.out_ann, [Ann.REG_ADDRESS, registers[self.address]])
-                        handle_reg = getattr(self, 'handle_reg_0x%02x' % self.address)
-                        handle_reg(reg_value)
-
-                    self.reg = []
-                    self.address += 1
-                    self.ss = -1
+                self.reg = []
+                self.address += 1
+                self.ss = -1

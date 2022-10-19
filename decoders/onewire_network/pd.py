@@ -80,8 +80,13 @@ class Decoder(srd.Decoder):
         if code == 'RESET/PRESENCE':
             self.search = 'P'
             self.bit_cnt = 0
-            self.put(ss, es, self.out_ann,
-                     [0, ['Reset/presence: %s' % ('true' if val else 'false')]])
+            self.put(
+                ss,
+                es,
+                self.out_ann,
+                [0, [f"Reset/presence: {'true' if val else 'false'}"]],
+            )
+
             self.put(ss, es, self.out_python, ['RESET/PRESENCE', val])
             self.state = 'COMMAND'
             return
@@ -158,12 +163,12 @@ class Decoder(srd.Decoder):
         if self.search == 'P':
             # Master receives an original address bit.
             self.data_p = self.data_p & ~(1 << self.bit_cnt) | \
-                          (val << self.bit_cnt)
+                              (val << self.bit_cnt)
             self.search = 'N'
         elif self.search == 'N':
             # Master receives a complemented address bit.
             self.data_n = self.data_n & ~(1 << self.bit_cnt) | \
-                          (val << self.bit_cnt)
+                              (val << self.bit_cnt)
             self.search = 'D'
         elif self.search == 'D':
             # Master transmits an address bit.

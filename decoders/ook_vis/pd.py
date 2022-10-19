@@ -99,19 +99,16 @@ class Decoder(srd.Decoder):
                 preamble = '1010'
                 char_last = char_second
             for i in range(len(ook)):
-                if preamble == '1111':
-                    if ook[i][2] != char_last:
-                        preamble_end = i
-                        break
-                    else:
-                        char_last = ook[i][2]
+                if (
+                    preamble == '1111'
+                    and ook[i][2] != char_last
+                    or preamble != '1111'
+                    and ook[i][2] == char_last
+                ):
+                    preamble_end = i
+                    break
                 else:
-                    if ook[i][2] != char_last:
-                        char_last = ook[i][2]
-                    else:
-                        preamble_end = i
-                        break
-
+                    char_last = ook[i][2]
             if len(ook) >= preamble_end:
                 preamble_end += int(self.sync_offset) - 1
                 self.ss, self.es = ook[0][0], ook[preamble_end][1]
@@ -126,7 +123,7 @@ class Decoder(srd.Decoder):
 
                 ookstring = self.ookstring[self.decode_pos:]
                 rem_nibbles = len(ookstring) // bits
-                for i in range(rem_nibbles): # Display the rest of nibbles.
+                for _ in range(rem_nibbles):
                     self.ss = ook[self.decode_pos][0]
                     self.es = ook[self.decode_pos + bits - 1][1]
                     self.put_field(bits, line)
@@ -135,7 +132,7 @@ class Decoder(srd.Decoder):
         param = self.ookstring[self.decode_pos:self.decode_pos + numbits]
         if 'rev' in self.displayas:
             param = param[::-1]     # Reversed from right.
-        if not 'E' in param:        # Format if no errors.
+        if 'E' not in param:        # Format if no errors.
             if 'Hex' in self.displayas:
                 param = hex(int(param, 2))[2:]
             elif 'BCD' in self.displayas:
@@ -163,7 +160,7 @@ class Decoder(srd.Decoder):
             ref = int(self.ref) - 1
             self.display_ref(self.trace_num, ref)
             if len(self.ookcache) == int(self.ref): # Backfill.
-                for i in range(0, ref):
+                for i in range(ref):
                     self.display_ref(i, ref)
         elif self.ref == 'show numbers': # Display ref numbers.
             self.ss = self.ookcache[self.trace_num][0][0]
@@ -172,9 +169,7 @@ class Decoder(srd.Decoder):
             self.putx([1, [str(self.trace_num + 1)]])
 
     def display_ref(self, t_num, ref):
-        display_len = len(self.ookcache[ref])
-        if len(self.ookcache[t_num]) < len(self.ookcache[ref]):
-            display_len = len(self.ookcache[t_num])
+        display_len = min(len(self.ookcache[t_num]), len(self.ookcache[ref]))
         for i in range(display_len):
             self.ss = self.ookcache[t_num][i][0]
             self.es = self.ookcache[t_num][i][1]

@@ -158,9 +158,7 @@ class Decoder(srd.Decoder):
             return '{:d}'.format(v)
         if fmt == 'hex':
             return '{:02X}'.format(v)
-        if fmt == 'bin':
-            return '{:08b}'.format(v)
-        return '{}'.format(v)
+        return '{:08b}'.format(v) if fmt == 'bin' else f'{v}'
 
     def flush_packet(self):
         if self.packet:
@@ -244,11 +242,7 @@ class Decoder(srd.Decoder):
             self.start_code = value
             ann = Ann.STARTCODE
             val_text = self.format_value(value)
-            txts = [
-                'STARTCODE {}'.format(val_text),
-                'START {}'.format(val_text),
-                '{}'.format(val_text),
-            ]
+            txts = [f'STARTCODE {val_text}', f'START {val_text}', f'{val_text}']
         else:
             # Slot 1+, the payload bytes.
             ann = Ann.DATABYTE
@@ -256,9 +250,10 @@ class Decoder(srd.Decoder):
             txts = [
                 'DATABYTE {:d}: {}'.format(slot_nr, val_text),
                 'DATA {:d}: {}'.format(slot_nr, val_text),
-                'DATA {}'.format(val_text),
-                '{}'.format(val_text),
+                f'DATA {val_text}',
+                f'{val_text}',
             ]
+
         self.putg(ss, es, [ann, txts])
 
         # Tell channel data for peripherals from arbitrary slot values.
@@ -278,9 +273,10 @@ class Decoder(srd.Decoder):
                 txts = [
                     'CHANNEL {:d}: {}'.format(slot_nr, val_text),
                     'CH {:d}: {}'.format(slot_nr, val_text),
-                    'CH {}'.format(val_text),
-                    '{}'.format(val_text),
+                    f'CH {val_text}',
+                    f'{val_text}',
                 ]
+
         else:
             # Unhandled start code. Provide "anonymous" values.
             ann = Ann.SLOT_DATA
@@ -288,9 +284,10 @@ class Decoder(srd.Decoder):
             txts = [
                 'SLOT {:d}: {}'.format(slot_nr, val_text),
                 'SL {:d}: {}'.format(slot_nr, val_text),
-                'SL {}'.format(val_text),
-                '{}'.format(val_text),
+                f'SL {val_text}',
+                f'{val_text}',
             ]
+
         if ann is not None:
             self.putg(ss, es, [ann, txts])
 

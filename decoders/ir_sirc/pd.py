@@ -130,7 +130,7 @@ class Decoder(srd.Decoder):
         except SIRCError:
             low_es = high_es + int(PAUSE_USEC * self.snum_per_us)
             good = False
-        self.putg(high_ss, low_es, Ann.BIT, ['{}'.format(bit)])
+        self.putg(high_ss, low_es, Ann.BIT, [f'{bit}'])
         return bit, high_ss, low_es, good
 
     def read_signal(self):
@@ -153,41 +153,50 @@ class Decoder(srd.Decoder):
                 raise SIRCError('too many bits')
             if not good:
                 if len(bits) == 12:
-                    command = bits[0:7]
+                    command = bits[:7]
                     address = bits[7:12]
                     extended = []
                 elif len(bits) == 15:
-                    command = bits[0:7]
+                    command = bits[:7]
                     address = bits[7:15]
                     extended = []
                 elif len(bits) == 20:
-                    command = bits[0:7]
+                    command = bits[:7]
                     address = bits[7:12]
                     extended = bits[12:20]
                 else:
-                    raise SIRCError('incorrect bits count {}'.format(len(bits)))
+                    raise SIRCError(f'incorrect bits count {len(bits)}')
                 break
 
         command_num = bitpack_lsb(command, 0)
         address_num = bitpack_lsb(address, 0)
         command_str = '0x{:02X}'.format(command_num)
         address_str = '0x{:02X}'.format(address_num)
-        self.putg(command[0][1], command[-1][2], Ann.CMD, [
-            'Command: {}'.format(command_str),
-            'C:{}'.format(command_str),
-        ])
-        self.putg(address[0][1], address[-1][2], Ann.ADDR, [
-            'Address: {}'.format(address_str),
-            'A:{}'.format(address_str),
-        ])
+        self.putg(
+            command[0][1],
+            command[-1][2],
+            Ann.CMD,
+            [f'Command: {command_str}', f'C:{command_str}'],
+        )
+
+        self.putg(
+            address[0][1],
+            address[-1][2],
+            Ann.ADDR,
+            [f'Address: {address_str}', f'A:{address_str}'],
+        )
+
         extended_num = None
         if extended:
             extended_num = bitpack_lsb(extended, 0)
             extended_str = '0x{:02X}'.format(extended_num)
-            self.putg(extended[0][1], extended[-1][2], Ann.EXT, [
-                'Extended: {}'.format(extended_str),
-                'E:{}'.format(extended_str),
-            ])
+            self.putg(
+                extended[0][1],
+                extended[-1][2],
+                Ann.EXT,
+                [f'Extended: {extended_str}', f'E:{extended_str}'],
+            )
+
         return address_num, command_num, extended_num, bits[0][1], bits[-1][2]
 
     def decode(self):
@@ -208,8 +217,4 @@ class Decoder(srd.Decoder):
             except SIRCErrorSilent as e:
                 pass
             except SIRCError as e:
-                self.putg(frame_ss, self.samplenum, Ann.WARN, [
-                    'Error: {}'.format(e),
-                    'Error',
-                    'E',
-                ])
+                self.putg(frame_ss, self.samplenum, Ann.WARN, [f'Error: {e}', 'Error', 'E'])

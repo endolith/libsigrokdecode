@@ -194,16 +194,12 @@ class Decoder(srd.Decoder):
             elif cmd == 'STOP':
                 # TODO
                 self.state = 'IDLE'
-            else:
-                pass # TODO
         elif self.state == 'READ REGS':
             # Wait for an address read operation.
             # TODO: We should only handle packets to the slave(?)
             if cmd == 'ADDRESS READ':
                 self.state = 'READ REGS2'
                 return
-            else:
-                pass # TODO
         elif self.state == 'READ REGS2':
             if cmd == 'DATA READ':
                 handle_reg = getattr(self, 'handle_reg_0x%02x' % self.reg)
@@ -213,5 +209,3 @@ class Decoder(srd.Decoder):
             elif cmd == 'STOP':
                 # TODO
                 self.state = 'IDLE'
-            else:
-                pass # TODO?

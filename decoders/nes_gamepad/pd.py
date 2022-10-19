@@ -85,15 +85,15 @@ class Decoder(srd.Decoder):
         button_str = ''
 
         for b in enumerate(bits):
-            button_index = b[0]
             button_is_pressed = b[1] == '0'
 
             if button_is_pressed:
                 if button_str != '':
                     button_str += ' + '
+                button_index = b[0]
                 button_str += buttons[button_index]
 
-        self.putx([0, ['%s' % button_str]])
+        self.putx([0, [f'{button_str}']])
 
     def decode(self, ss, es, data):
         ptype, mosi, miso = data

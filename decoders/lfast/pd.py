@@ -200,7 +200,7 @@ class Decoder(srd.Decoder):
             ss = es
             es = ss + bit_len
             cts = value & 0x01
-            self.put_ann(int(ss), int(es), ann_header_cts, ['{}'.format(cts)])
+            self.put_ann(int(ss), int(es), ann_header_cts, [f'{cts}'])
 
             self.bits = []
             self.state = state_payload
@@ -222,13 +222,11 @@ class Decoder(srd.Decoder):
             # Check the channel_types list for the meaning of the magic values
             if (self.ch_type_id >= 0b0100) and (self.ch_type_id <= 0b1011):
                 self.put_ann(self.ss_byte, self.es_bit, ann_payload, [value_hex])
+            elif len(self.payload) == 0:
+                ctrl_data = control_payloads.get(value, value_hex)
+                self.put_ann(self.ss_byte, self.es_bit, ann_control_data, [ctrl_data])
             else:
-                # Control transfers are 8-bit transfers, so only evaluate the first byte
-                if len(self.payload) == 0:
-                    ctrl_data = control_payloads.get(value, value_hex)
-                    self.put_ann(self.ss_byte, self.es_bit, ann_control_data, [ctrl_data])
-                else:
-                    self.put_ann(self.ss_byte, self.es_bit, ann_control_data, [value_hex])
+                self.put_ann(self.ss_byte, self.es_bit, ann_control_data, [value_hex])
 
             self.bits = []
             self.es_payload = self.es_bit
@@ -239,21 +237,29 @@ class Decoder(srd.Decoder):
                 self.state = state_sleepbit
 
     def handle_sleepbit(self):
-        if len(self.bits) == 0:
+        if len(self.bits) != 0 and len(self.bits) <= 1 and self.bits[0] == 1:
+            self.put_ann(self.ss_bit, self.es_bit, ann_sleepbit, ['LVDS sleep mode request', 'Sleep', 'Y'])
+        elif len(self.bits) != 0 and len(self.bits) <= 1 or len(self.bits) == 0:
             self.put_ann(self.ss_bit, self.es_bit, ann_sleepbit, ['No LVDS sleep mode request', 'No sleep', 'N'])
-        elif len(self.bits) > 1:
-            self.put_ann(self.ss_bit, self.es_bit, ann_warning, ['Expected only the sleep bit, got {} bits instead'.format(len(self.bits))])
+
         else:
-            if self.bits[0] == 1:
-                self.put_ann(self.ss_bit, self.es_bit, ann_sleepbit, ['LVDS sleep mode request', 'Sleep', 'Y'])
-            else:
-                self.put_ann(self.ss_bit, self.es_bit, ann_sleepbit, ['No LVDS sleep mode request', 'No sleep', 'N'])
+            self.put_ann(
+                self.ss_bit,
+                self.es_bit,
+                ann_warning,
+                [
+                    f'Expected only the sleep bit, got {len(self.bits)} bits instead'
+                ],
+            )
 
         # We only send the payload out if this is an actual data transfer;
         # check the channel_types list for the meaning of the magic values
-        if (self.ch_type_id >= 0b0100) and (self.ch_type_id <= 0b1011):
-            if len(self.payload) > 0:
-                self.put_payload()
+        if (
+            (self.ch_type_id >= 0b0100)
+            and (self.ch_type_id <= 0b1011)
+            and len(self.payload) > 0
+        ):
+            self.put_payload()
 
     def decode(self):
         while True:

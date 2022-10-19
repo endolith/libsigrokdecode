@@ -120,10 +120,7 @@ class Decoder(srd.Decoder):
     def extract_bits(self, byte, start_bit, num_bits):
         begin = 7 - start_bit
         end = begin + num_bits
-        if begin < 0 or end > 8:
-            return 0
-        binary = format(byte, '08b')[begin:end]
-        return int(binary, 2)
+        return 0 if begin < 0 or end > 8 else int(format(byte, '08b')[begin:end], 2)
 
     def extract_vars(self, reg_vars, reg_value):
         # Iterate all vars on current register.
@@ -136,7 +133,7 @@ class Decoder(srd.Decoder):
             # If var has options, just add the option meaning.
             if 'opts' in var:
                 opt = var['opts'].get(var_value, 'unknown')
-                data += ' (' + opt + ')'
+                data += f' ({opt})'
 
             # Add var separator.
             if reg_vars.index(var) != len(reg_vars) - 1:
@@ -145,7 +142,7 @@ class Decoder(srd.Decoder):
 
     def parse_config_register(self, addr, value, is_write):
         reg_value = value[0]
-        data = 'CFG_REG[' + hex(addr) + '] -> '
+        data = f'CFG_REG[{hex(addr)}] -> '
 
         # Get register vars for this register.
         if addr in CFG_REGS:
@@ -208,12 +205,12 @@ class Decoder(srd.Decoder):
         cmd, dta = self.mosi_bytes[0], self.mosi_bytes[1]
         channel = ((cmd[0] & 0x01) << 8) + dta
         data = self.extract_vars(CHN_CFG, cmd[0])
-        data += '| CHN = ' + str(channel)
+        data += f'| CHN = {str(channel)}'
         self.put(self.mosi_bytes[0][1], self.mosi_bytes[1][2],
                  self.out_ann, [Ann.REG_WR, [data]])
 
     def handle_STAT(self):
-        status = 'STAT = ' + self.extract_vars(STAT_REG, self.miso_bytes[0][0])
+        status = f'STAT = {self.extract_vars(STAT_REG, self.miso_bytes[0][0])}'
         self.put(self.miso_bytes[0][1], self.miso_bytes[0][2],
                  self.out_ann, [Ann.REG_RD, [status]])
 
@@ -221,7 +218,7 @@ class Decoder(srd.Decoder):
         cmd, cmd_name, cmd_hnd = '', '', None
 
         for byte in self.mosi_bytes:
-            cmd += hex(byte[0]) + ' '
+            cmd += f'{hex(byte[0])} '
 
         cmd = self.mosi_bytes[0][0]
 
@@ -273,14 +270,17 @@ class Decoder(srd.Decoder):
                 self.requirements_met = False
                 raise ChannelError('CS# pin required.')
 
-            if data1 is None and data2 == 0:
+            if (
+                data1 is None
+                and data2 == 0
+                or (data1 is not None or data2 != 1)
+                and data1 == 1
+                and data2 == 0
+            ):
                 self.set_cs_status(ss, True)
 
             elif data1 is None and data2 == 1:
                 self.set_cs_status(ss, False)
-
-            elif data1 == 1 and data2 == 0:
-                self.set_cs_status(ss, True)
 
             elif data1 == 0 and data2 == 1:
                 self.set_cs_status(ss, False)

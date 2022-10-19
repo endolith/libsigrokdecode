@@ -137,9 +137,7 @@ class Decoder(srd.Decoder):
             self.data = (self.options['vref'] * self.data) / 0x0FFF
         else:
             self.data = (self.options['vref'] * self.data) / 0xFFFF
-        ann = []
-        for format in input_voltage_format:
-            ann.append(format % self.data)
+        ann = [format % self.data for format in input_voltage_format]
         self.data = 0
 
         if self.dac_val == 0x0F: # All DACs (A and B).

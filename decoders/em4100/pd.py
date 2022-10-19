@@ -137,8 +137,13 @@ class Decoder(srd.Decoder):
                 c = 4 if s == 'OK' else 5
                 if s == 'ERROR':
                     self.all_row_parity_ok = False
-                self.put(ss, es, self.out_ann,
-                         [c, ['Row parity: ' + s, 'RP: ' + s, 'RP', 'R']])
+                self.put(
+                    ss,
+                    es,
+                    self.out_ann,
+                    [c, [f'Row parity: {s}', f'RP: {s}', 'RP', 'R']],
+                )
+
                 self.tag = (self.tag << 4) | self.data
                 self.data_bits = 0
                 if self.payload_cnt == 50:
@@ -165,7 +170,7 @@ class Decoder(srd.Decoder):
 
                 for i in range(1, 5):
                     s = 'OK' if self.data_col_parity[i] == \
-                                self.col_parity[i] else 'ERROR'
+                                    self.col_parity[i] else 'ERROR'
                     c = 6 if s == 'OK' else 7
                     self.put(self.col_parity_pos[i - 1][0],
                              self.col_parity_pos[i - 1][1], self.out_ann,
@@ -205,11 +210,10 @@ class Decoder(srd.Decoder):
                 ss = int(self.oldsamplenum - self.oldpl/2)
                 self.putbit(bit, ss, es)
                 self.last_bit_pos = int(self.samplenum)
-            else:
-                if self.last_bit_pos <= self.oldsamplenum - self.oldpl:
-                    ss = int(self.oldsamplenum - self.oldpl)
-                    self.putbit(bit, ss, es)
-                    self.last_bit_pos = int(self.samplenum)
+            elif self.last_bit_pos <= self.oldsamplenum - self.oldpl:
+                ss = int(self.oldsamplenum - self.oldpl)
+                self.putbit(bit, ss, es)
+                self.last_bit_pos = int(self.samplenum)
 
     def decode(self):
         if not self.samplerate:

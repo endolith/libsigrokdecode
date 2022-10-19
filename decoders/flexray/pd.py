@@ -204,11 +204,10 @@ class Decoder(srd.Decoder):
 
             if bitnum > 1:
                 self.putx([15, [str(fr_rx)]])
-            else:
-                if len(self.rawbits) == 2:
-                    self.ss_bit1 = self.samplenum
-                elif len(self.rawbits) == 3:
-                    self.ss_bit2 = self.samplenum
+            elif len(self.rawbits) == 2:
+                self.ss_bit1 = self.samplenum
+            elif len(self.rawbits) == 3:
+                self.ss_bit2 = self.samplenum
 
             self.curbit += 1 # Increase self.curbit (bitnum is not affected).
             return
@@ -220,7 +219,6 @@ class Decoder(srd.Decoder):
         if bitnum == 0:
             self.ss_bit0 = self.samplenum
 
-        # Bit 1: Start of header
         elif bitnum == 1:
             if self.rawbits[:3] == [1, 1, 0]:
                 self.put(self.tss_start, self.tss_end, self.out_ann,
@@ -239,57 +237,42 @@ class Decoder(srd.Decoder):
 
             # TODO: warning, if sequence is neither [1, 1, 0] nor [1, 1, 1]
 
-        # Bit 2: Payload preamble indicator. Must be 0 if null frame indicator is 0.
         elif bitnum == 2:
             self.putx([4, ['Payload preamble indicator: %d' % fr_rx,
                            'PPI: %d' % fr_rx]])
 
-        # Bit 3: Null frame indicator (inversed)
         elif bitnum == 3:
             data_type = 'data frame' if fr_rx else 'null frame'
-            self.putx([5, ['Null frame indicator: %s' % data_type,
-                           'NF: %d' % fr_rx, 'NF']])
+            self.putx([5, [f'Null frame indicator: {data_type}', 'NF: %d' % fr_rx, 'NF']])
 
-        # Bit 4: Sync frame indicator
-        # Must be 1 if startup frame indicator is 1.
         elif bitnum == 4:
             self.putx([6, ['Sync frame indicator: %d' % fr_rx,
                            'Sync: %d' % fr_rx, 'Sync']])
 
-        # Bit 5: Startup frame indicator
         elif bitnum == 5:
             self.putx([7, ['Startup frame indicator: %d' % fr_rx,
                            'Startup: %d' % fr_rx, 'Startup']])
 
-        # Remember start of ID (see below).
         elif bitnum == 6:
             self.ss_block = self.samplenum
 
-        # Bits 6-16: Frame identifier (ID[10..0])
-        # ID must NOT be 0.
         elif bitnum == 16:
             self.id = int(''.join(str(d) for d in self.bits[6:]), 2)
             self.putb([8, ['Frame ID: %d' % self.id, 'ID: %d' % self.id,
                            '%d' % self.id]])
 
-        # Remember start of payload length (see below).
         elif bitnum == 17:
             self.ss_block = self.samplenum
 
-        # Bits 17-23: Payload length (Length[7..0])
-        # Payload length in header is the half of the real payload size.
         elif bitnum == 23:
             self.payload_length = int(''.join(str(d) for d in self.bits[17:]), 2)
             self.putb([9, ['Payload length: %d' % self.payload_length,
                            'Length: %d' % self.payload_length,
                            '%d' % self.payload_length]])
 
-        # Remember start of header CRC (see below).
         elif bitnum == 24:
             self.ss_block = self.samplenum
 
-        # Bits 24-34: Header CRC (11-bit) (HCRC[11..0])
-        # Calculation of header CRC is equal on both channels.
         elif bitnum == 34:
             bits = ''.join([str(b) for b in self.bits[4:24]])
             header_to_check = int(bits, 2)
@@ -304,24 +287,18 @@ class Decoder(srd.Decoder):
                             '0x%X (%s)' % (self.header_crc, crc_ann),
                             '0x%X' % self.header_crc]])
 
-        # Remember start of cycle code (see below).
         elif bitnum == 35:
             self.ss_block = self.samplenum
 
-        # Bits 35-40: Cycle code (Cyc[6..0])
-        # Cycle code. Must be between 0 and 63.
         elif bitnum == 40:
             self.cycle = int(''.join(str(d) for d in self.bits[35:]), 2)
             self.putb([11, ['Cycle: %d' % self.cycle, 'Cyc: %d' % self.cycle,
                             '%d' % self.cycle]])
             self.last_databit = 41 + 2 * self.payload_length * 8
 
-        # Remember all databyte bits, except the very last one.
         elif bitnum in range(41, self.last_databit):
             self.ss_databytebits.append(self.samplenum)
 
-        # Bits 41-X: Data field (0-254 bytes, depending on length)
-        # The bits within a data byte are transferred MSB-first.
         elif bitnum == self.last_databit:
             self.ss_databytebits.append(self.samplenum) # Last databyte bit.
             for i in range(2 * self.payload_length):
@@ -334,9 +311,6 @@ class Decoder(srd.Decoder):
             self.ss_databytebits = []
             self.ss_block = self.samplenum # Remember start of trailer CRC.
 
-        # Trailer CRC (24-bit) (CRC[11..0])
-        # Initialization vector of channel A and B are different, so CRCs are
-        # different for same data.
         elif bitnum == self.last_databit + 23:
             bits = ''.join([str(b) for b in self.bits[1:-24]])
             frame_to_check = int(bits, 2)
@@ -353,15 +327,12 @@ class Decoder(srd.Decoder):
                             '0x%X' % self.frame_crc]])
             self.end_of_frame = True
 
-        # Remember start of frame end sequence (see below).
         elif bitnum == self.last_databit + 24:
             self.ss_block = self.samplenum
 
-        # Frame end sequence, must be 1 followed by 0.
         elif bitnum == self.last_databit + 25:
             self.putb([14, ['Frame end sequence', 'FES']])
 
-        # Check for DTS
         elif bitnum == self.last_databit + 26:
             if not fr_rx:
                 self.dynamic_frame = True
@@ -369,23 +340,18 @@ class Decoder(srd.Decoder):
                 self.last_xmit_bit = bitnum
             self.ss_block = self.samplenum
 
-        # Remember start of channel idle delimiter (see below).
         elif bitnum == self.last_xmit_bit:
             self.ss_block = self.samplenum
 
-        # Channel idle limiter (CID[11..0])
         elif bitnum == self.last_xmit_bit + Const.cChannelIdleDelimiter - 1:
             self.putb([18, ['Channel idle delimiter', 'CID']])
             self.reset_variables()
 
-        # DTS if dynamic frame
         elif bitnum > self.last_databit + 27:
-            if self.dynamic_frame:
-                if fr_rx:
-                    if self.last_xmit_bit == 999:
-                        self.putb([19, ['Dynamic trailing sequence', 'DTS']])
-                        self.last_xmit_bit = bitnum + 1
-                        self.ss_block = self.samplenum
+            if self.dynamic_frame and fr_rx and self.last_xmit_bit == 999:
+                self.putb([19, ['Dynamic trailing sequence', 'DTS']])
+                self.last_xmit_bit = bitnum + 1
+                self.ss_block = self.samplenum
 
         self.curbit += 1
 

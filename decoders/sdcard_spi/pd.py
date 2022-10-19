@@ -23,8 +23,12 @@ from common.sdcard import (cmd_names, acmd_names)
 
 responses = '1 1b 2 3 7'.split()
 
-a = ['CMD%d' % i for i in range(64)] + ['ACMD%d' % i for i in range(64)] + \
-    ['R' + r.upper() for r in responses] + ['BIT', 'BIT_WARNING']
+a = (
+    ['CMD%d' % i for i in range(64)]
+    + ['ACMD%d' % i for i in range(64)]
+    + [f'R{r.upper()}' for r in responses]
+) + ['BIT', 'BIT_WARNING']
+
 Ann = SrdIntEnum.from_list('Ann', a)
 
 class Decoder(srd.Decoder):
@@ -77,7 +81,7 @@ class Decoder(srd.Decoder):
         self.put(self.ss_cmd, self.es_cmd, self.out_ann, data)
 
     def putc(self, cmd, desc):
-        self.putx([cmd, ['%s: %s' % (self.cmd_str, desc)]])
+        self.putx([cmd, [f'{self.cmd_str}: {desc}']])
 
     def putb(self, data):
         self.put(self.ss_bit, self.es_bit, self.out_ann, data)
@@ -127,7 +131,7 @@ class Decoder(srd.Decoder):
         if bit == 0:
             self.putb([Ann.BIT, ['Start bit: %d' % bit]])
         else:
-            self.putb([Ann.BIT_WARNING, ['Start bit: %s (Warning: Must be 0!)' % bit]])
+            self.putb([Ann.BIT_WARNING, [f'Start bit: {bit} (Warning: Must be 0!)']])
 
         # Bits[46:46]: Transmitter bit (1 == host)
         bit, self.ss_bit, self.es_bit = tb(5, 6)[0], tb(5, 6)[1], tb(5, 6)[2]
@@ -194,7 +198,7 @@ class Decoder(srd.Decoder):
             return
         self.es_cmd = self.es
         self.read_buf = self.read_buf[4:] # TODO: Document or redo.
-        self.putx([Ann.CMD9, ['CSD: %s' % self.read_buf]])
+        self.putx([Ann.CMD9, [f'CSD: {self.read_buf}']])
         # TODO: Decode all bits.
         self.read_buf = []
         ### self.state = 'GET RESPONSE R1'
@@ -206,7 +210,7 @@ class Decoder(srd.Decoder):
         self.read_buf.append(self.miso)
         if len(self.read_buf) < 16:
             return
-        self.putx([Ann.CMD10, ['CID: %s' % self.read_buf]])
+        self.putx([Ann.CMD10, [f'CID: {self.read_buf}']])
         # TODO: Decode all bits.
         self.read_buf = []
         self.state = 'GET RESPONSE R1'
@@ -243,7 +247,7 @@ class Decoder(srd.Decoder):
         # CMD59: CRC_ON_OFF
         crc_on_off = self.arg & (1 << 0)
         s = 'on' if crc_on_off == 1 else 'off'
-        self.putc(Ann.CMD59, 'Turn the SD card CRC option %s' % s)
+        self.putc(Ann.CMD59, f'Turn the SD card CRC option {s}')
         self.state = 'GET RESPONSE R1'
 
     def handle_acmd41(self):
@@ -305,31 +309,31 @@ class Decoder(srd.Decoder):
 
         # Bit 0: 'In idle state' bit
         s = '' if (res & (1 << 0)) else 'not '
-        putbit(0, ['Card is %sin idle state' % s])
+        putbit(0, [f'Card is {s}in idle state'])
 
         # Bit 1: 'Erase reset' bit
         s = '' if (res & (1 << 1)) else 'not '
-        putbit(1, ['Erase sequence %scleared' % s])
+        putbit(1, [f'Erase sequence {s}cleared'])
 
         # Bit 2: 'Illegal command' bit
         s = 'I' if (res & (1 << 2)) else 'No i'
-        putbit(2, ['%sllegal command detected' % s])
+        putbit(2, [f'{s}llegal command detected'])
 
         # Bit 3: 'Communication CRC error' bit
         s = 'failed' if (res & (1 << 3)) else 'was successful'
-        putbit(3, ['CRC check of last command %s' % s])
+        putbit(3, [f'CRC check of last command {s}'])
 
         # Bit 4: 'Erase sequence error' bit
         s = 'E' if (res & (1 << 4)) else 'No e'
-        putbit(4, ['%srror in the sequence of erase commands' % s])
+        putbit(4, [f'{s}rror in the sequence of erase commands'])
 
         # Bit 5: 'Address error' bit
         s = 'M' if (res & (1 << 4)) else 'No m'
-        putbit(5, ['%sisaligned address used in command' % s])
+        putbit(5, [f'{s}isaligned address used in command'])
 
         # Bit 6: 'Parameter error' bit
         s = '' if (res & (1 << 4)) else 'not '
-        putbit(6, ['Command argument %soutside allowed range' % s])
+        putbit(6, [f'Command argument {s}outside allowed range'])
 
         # Bit 7: Always set to 0
         putbit(7, ['Bit 7 (always 0)'])
@@ -377,7 +381,13 @@ class Decoder(srd.Decoder):
                 return
             if len(self.read_buf) == self.blocklen:
                 self.es_data = self.es
-                self.put(self.ss_data, self.es_data, self.out_ann, [Ann.CMD17, ['Block data: %s' % self.read_buf]])
+                self.put(
+                    self.ss_data,
+                    self.es_data,
+                    self.out_ann,
+                    [Ann.CMD17, [f'Block data: {self.read_buf}']],
+                )
+
             elif len(self.read_buf) == (self.blocklen + 1):
                 self.ss_crc = self.ss
             elif len(self.read_buf) == (self.blocklen + 2):
@@ -404,7 +414,13 @@ class Decoder(srd.Decoder):
             if len(self.read_buf) < self.blocklen:
                 return
             self.es_data = self.es
-            self.put(self.ss_data, self.es_data, self.out_ann, [Ann.CMD24, ['Block data: %s' % self.read_buf]])
+            self.put(
+                self.ss_data,
+                self.es_data,
+                self.out_ann,
+                [Ann.CMD24, [f'Block data: {self.read_buf}']],
+            )
+
             self.read_buf = []
             self.state = 'DATA RESPONSE'
         elif mosi == 0xfe:
@@ -490,7 +506,7 @@ class Decoder(srd.Decoder):
             self.miso, self.mosi = miso, mosi
             # Call the respective handler method for the command.
             a, cmdstr = 'a' if self.is_acmd else '', self.state[10:].lower()
-            handle_cmd = getattr(self, 'handle_%scmd%s' % (a, cmdstr))
+            handle_cmd = getattr(self, f'handle_{a}cmd{cmdstr}')
             handle_cmd()
             self.cmd_token = []
             self.cmd_token_bits = []
@@ -504,7 +520,7 @@ class Decoder(srd.Decoder):
             # Call the respective handler method for the response.
             # Assume return to IDLE state, but allow response handlers
             # to advance to some other state when applicable.
-            s = 'handle_response_%s' % self.state[13:].lower()
+            s = f'handle_response_{self.state[13:].lower()}'
             handle_response = getattr(self, s)
             self.state = 'IDLE'
             handle_response(miso)

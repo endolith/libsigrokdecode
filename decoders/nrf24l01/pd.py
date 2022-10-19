@@ -159,11 +159,10 @@ class Decoder(srd.Decoder):
 
     def format_command(self):
         '''Returns the label for the current command.'''
-        if self.cmd == 'R_REGISTER':
-            reg = regs[self.dat][0] if self.dat in regs else 'unknown register'
-            return 'Cmd R_REGISTER "{}"'.format(reg)
-        else:
-            return 'Cmd {}'.format(self.cmd)
+        if self.cmd != 'R_REGISTER':
+            return f'Cmd {self.cmd}'
+        reg = regs[self.dat][0] if self.dat in regs else 'unknown register'
+        return f'Cmd R_REGISTER "{reg}"'
 
     def parse_command(self, b):
         '''Parses the command byte.
@@ -176,7 +175,7 @@ class Decoder(srd.Decoder):
         '''
 
         if (b & 0xe0) in (0b00000000, 0b00100000):
-            c = 'R_REGISTER' if not (b & 0xe0) else 'W_REGISTER'
+            c = 'W_REGISTER' if b & 0xe0 else 'R_REGISTER'
             d = b & 0x1f
             m = regs[d][1] if d in regs else 1
             return (c, d, 1, m)
@@ -226,9 +225,9 @@ class Decoder(srd.Decoder):
 
         if self.cmd == 'W_REGISTER' and ann == self.ann_cmd:
             # The 'W_REGISTER' command is merged with the following byte(s).
-            label = '{}: {}'.format(self.format_command(), name)
+            label = f'{self.format_command()}: {name}'
         else:
-            label = 'Reg {}'.format(name)
+            label = f'Reg {name}'
 
         self.decode_mb_data(pos, ann, data, label, True)
 
@@ -244,9 +243,7 @@ class Decoder(srd.Decoder):
         else:
             def escape(b):
                 c = chr(b)
-                if not str.isprintable(c):
-                    return '\\x{:02X}'.format(b)
-                return c
+                return c if str.isprintable(c) else '\\x{:02X}'.format(b)
 
         data = ''.join([escape(b) for b in data])
         text = '{} = "{}"'.format(label, data)
@@ -264,16 +261,15 @@ class Decoder(srd.Decoder):
         elif self.cmd == 'R_RX_PAYLOAD':
             self.decode_mb_data(pos, self.ann_rx,
                                 self.miso_bytes(), 'RX payload', False)
-        elif (self.cmd == 'W_TX_PAYLOAD' or
-              self.cmd == 'W_TX_PAYLOAD_NOACK'):
+        elif self.cmd in ['W_TX_PAYLOAD', 'W_TX_PAYLOAD_NOACK']:
             self.decode_mb_data(pos, self.ann_tx,
                                 self.mosi_bytes(), 'TX payload', False)
         elif self.cmd == 'W_ACK_PAYLOAD':
-            lbl = 'ACK payload for pipe {}'.format(self.dat)
+            lbl = f'ACK payload for pipe {self.dat}'
             self.decode_mb_data(pos, self.ann_tx,
                                 self.mosi_bytes(), lbl, False)
         elif self.cmd == 'R_RX_PL_WID':
-            msg = 'Payload width = {}'.format(self.mb[0][1])
+            msg = f'Payload width = {self.mb[0][1]}'
             self.putp(pos, self.ann_reg, msg)
         elif self.cmd == 'ACTIVATE':
             self.putp(pos, self.ann_cmd, self.format_command())
@@ -321,12 +317,11 @@ class Decoder(srd.Decoder):
                 self.decode_command(pos, mosi)
                 # First MISO byte is always the status register.
                 self.decode_register(pos, self.ann_reg, 'STATUS', [miso])
+            elif not self.cmd or len(self.mb) >= self.max:
+                self.warn(pos, 'excess byte')
             else:
-                if not self.cmd or len(self.mb) >= self.max:
-                    self.warn(pos, 'excess byte')
-                else:
-                    # Collect the bytes after the command byte.
-                    if self.mb_s == -1:
-                        self.mb_s = ss
-                    self.mb_e = es
-                    self.mb.append((mosi, miso))
+                # Collect the bytes after the command byte.
+                if self.mb_s == -1:
+                    self.mb_s = ss
+                self.mb_e = es
+                self.mb.append((mosi, miso))

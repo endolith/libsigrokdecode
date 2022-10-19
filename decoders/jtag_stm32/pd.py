@@ -106,11 +106,11 @@ apb_ap_reg = {
 #              Bits[7:1]: Identity code ('ARM Ltd.': 0x3b)
 # Bits[0:0]:   Reserved (here: 0x1)
 def decode_device_id_code(bits):
-    id_hex = '0x%x' % int('0b' + bits, 2)
-    ver = cm3_idcode_ver.get(int('0b' + bits[-32:-28], 2), 'UNKNOWN')
-    part = cm3_idcode_part.get(int('0b' + bits[-28:-12], 2), 'UNKNOWN')
-    ids = jedec_id.get(int('0b' + bits[-12:-8], 2) + 1, {})
-    manuf = ids.get(int('0b' + bits[-7:-1], 2), 'UNKNOWN')
+    id_hex = '0x%x' % int(f'0b{bits}', 2)
+    ver = cm3_idcode_ver.get(int(f'0b{bits[-32:-28]}', 2), 'UNKNOWN')
+    part = cm3_idcode_part.get(int(f'0b{bits[-28:-12]}', 2), 'UNKNOWN')
+    ids = jedec_id.get(int(f'0b{bits[-12:-8]}', 2) + 1, {})
+    manuf = ids.get(int(f'0b{bits[-7:-1]}', 2), 'UNKNOWN')
     return (id_hex, manuf, ver, part)
 
 # DPACC is used to access debug port registers (CTRL/STAT, SELECT, RDBUFF).
@@ -122,21 +122,20 @@ def decode_device_id_code(bits):
 # Bits[0:0] = RnW: Read request (1) or write request (0)
 def data_in(instruction, bits):
     data, a, rnw = bits[:-3], bits[-3:-1], bits[-1]
-    data_hex = '0x%x' % int('0b' + data, 2)
+    data_hex = '0x%x' % int(f'0b{data}', 2)
     r = 'Read request' if (rnw == '1') else 'Write request'
     # reg = dp_reg[a] if (instruction == 'DPACC') else apb_ap_reg[a]
     reg = dp_reg[a] if (instruction == 'DPACC') else a # TODO
-    return 'New transaction: DATA: %s, A: %s, RnW: %s' % (data_hex, reg, r)
+    return f'New transaction: DATA: {data_hex}, A: {reg}, RnW: {r}'
 
 # APACC/DPACC, when transferring data OUT:
 # Bits[34:3] = DATA[31:0]: 32bit data which is read (read request)
 # Bits[2:0] = ACK[2:0]: 3-bit acknowledge
 def data_out(bits):
     data, ack = bits[:-3], bits[-3:]
-    data_hex = '0x%x' % int('0b' + data, 2)
+    data_hex = '0x%x' % int(f'0b{data}', 2)
     ack_meaning = ack_val.get(ack, 'Reserved')
-    return 'Previous transaction result: DATA: %s, ACK: %s' \
-           % (data_hex, ack_meaning)
+    return f'Previous transaction result: DATA: {data_hex}, ACK: {ack_meaning}'
 
 class Decoder(srd.Decoder):
     api_version = 3
@@ -178,25 +177,25 @@ class Decoder(srd.Decoder):
         self.put(self.samplenums[s][0], self.samplenums[e][1], self.out_ann, data)
 
     def handle_reg_bypass(self, cmd, bits):
-        self.putx([0, ['BYPASS: ' + bits]])
+        self.putx([0, [f'BYPASS: {bits}']])
 
     def handle_reg_idcode(self, cmd, bits):
         bits = bits[1:]
 
         id_hex, manuf, ver, part = decode_device_id_code(bits)
-        cc = '0x%x' % int('0b' + bits[-12:-8], 2)
-        ic = '0x%x' % int('0b' + bits[-7:-1], 2)
+        cc = '0x%x' % int(f'0b{bits[-12:-8]}', 2)
+        ic = '0x%x' % int(f'0b{bits[-7:-1]}', 2)
 
         self.putf(0, 0, [1, ['Reserved', 'Res', 'R']])
-        self.putf(8, 11, [0, ['Continuation code: %s' % cc, 'CC', 'C']])
-        self.putf(1, 7, [0, ['Identity code: %s' % ic, 'IC', 'I']])
-        self.putf(1, 11, [1, ['Manufacturer: %s' % manuf, 'Manuf', 'M']])
-        self.putf(12, 27, [1, ['Part: %s' % part, 'Part', 'P']])
-        self.putf(28, 31, [1, ['Version: %s' % ver, 'Version', 'V']])
+        self.putf(8, 11, [0, [f'Continuation code: {cc}', 'CC', 'C']])
+        self.putf(1, 7, [0, [f'Identity code: {ic}', 'IC', 'I']])
+        self.putf(1, 11, [1, [f'Manufacturer: {manuf}', 'Manuf', 'M']])
+        self.putf(12, 27, [1, [f'Part: {part}', 'Part', 'P']])
+        self.putf(28, 31, [1, [f'Version: {ver}', 'Version', 'V']])
         self.putf(32, 32, [1, ['BYPASS (BS TAP)', 'BS', 'B']])
 
         self.putx([2, ['IDCODE: %s (%s: %s/%s)' % \
-                  decode_device_id_code(bits)]])
+                      decode_device_id_code(bits)]])
 
     def handle_reg_dpacc(self, cmd, bits):
         bits = bits[1:]
@@ -212,7 +211,7 @@ class Decoder(srd.Decoder):
         bits = bits[1:]
         # Bits[31:1]: reserved. Bit[0]: DAPABORT.
         a = '' if (bits[0] == '1') else 'No '
-        s = 'DAPABORT = %s: %sDAP abort generated' % (bits[0], a)
+        s = f'DAPABORT = {bits[0]}: {a}DAP abort generated'
         self.putx([2, [s]])
 
         # Warn if DAPABORT[31:1] contains non-zero bits.
@@ -221,7 +220,7 @@ class Decoder(srd.Decoder):
 
     def handle_reg_unknown(self, cmd, bits):
         bits = bits[1:]
-        self.putx([2, ['Unknown instruction: %s' % bits]])
+        self.putx([2, [f'Unknown instruction: {bits}']])
 
     def decode(self, ss, es, data):
         cmd, val = data
@@ -240,30 +239,30 @@ class Decoder(srd.Decoder):
             # See UM 31.5 "STM32F10xxx JTAG TAP connection" for details.
             self.state = ir.get(val[5:9], ['UNKNOWN', 0])[0]
             bstap_ir = bs_ir.get(val[:5], ['UNKNOWN', 0])[0]
-            self.putf(4, 8, [1, ['IR (BS TAP): ' + bstap_ir]])
-            self.putf(0, 3, [1, ['IR (M3 TAP): ' + self.state]])
-            self.putx([2, ['IR: %s' % self.state]])
+            self.putf(4, 8, [1, [f'IR (BS TAP): {bstap_ir}']])
+            self.putf(0, 3, [1, [f'IR (M3 TAP): {self.state}']])
+            self.putx([2, [f'IR: {self.state}']])
 
         # State machine
         if self.state == 'BYPASS':
             # Here we're interested in incoming bits (TDI).
             if cmd != 'DR TDI':
                 return
-            handle_reg = getattr(self, 'handle_reg_%s' % self.state.lower())
+            handle_reg = getattr(self, f'handle_reg_{self.state.lower()}')
             handle_reg(cmd, val)
             self.state = 'IDLE'
         elif self.state in ('IDCODE', 'ABORT', 'UNKNOWN'):
             # Here we're interested in outgoing bits (TDO).
             if cmd != 'DR TDO':
                 return
-            handle_reg = getattr(self, 'handle_reg_%s' % self.state.lower())
+            handle_reg = getattr(self, f'handle_reg_{self.state.lower()}')
             handle_reg(cmd, val)
             self.state = 'IDLE'
         elif self.state in ('DPACC', 'APACC'):
             # Here we're interested in incoming and outgoing bits (TDI/TDO).
             if cmd not in ('DR TDI', 'DR TDO'):
                 return
-            handle_reg = getattr(self, 'handle_reg_%s' % self.state.lower())
+            handle_reg = getattr(self, f'handle_reg_{self.state.lower()}')
             handle_reg(cmd, val)
             if cmd == 'DR TDO': # Assumes 'DR TDI' comes before 'DR TDO'.
                 self.state = 'IDLE'

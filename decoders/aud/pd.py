@@ -76,28 +76,26 @@ class Decoder(srd.Decoder):
                 self.putx([0, ['0x%08X' % self.addr]])
                 self.lastaddr = self.addr
 
-            self.ncnt = 0
             self.addr = self.lastaddr
             self.ss = self.samplenum
-            if nib == 0x08:
+            self.ncnt = 0
+            if nib == 0x0A:
+                self.nmax = 4
+            elif nib == 0x0B:
+                self.nmax = 8
+            elif nib == 0x08:
                 self.nmax = 1
             elif nib == 0x09:
                 self.nmax = 2
-            elif nib == 0x0a:
-                self.nmax = 4
-            elif nib == 0x0b:
-                self.nmax = 8
             else:
                 # Undefined or idle.
                 self.nmax = 0
-        else:
-            # sync == 0, valid cmd: start or continue shifting in nibbles.
-            if (self.nmax > 0):
-                # Clear tgt nibble.
-                self.addr &= ~(0x0F << (self.ncnt * 4))
-                # Set nibble.
-                self.addr |= nib << (self.ncnt * 4)
-                self.ncnt += 1
+        elif (self.nmax > 0):
+            # Clear tgt nibble.
+            self.addr &= ~(0x0F << (self.ncnt * 4))
+            # Set nibble.
+            self.addr |= nib << (self.ncnt * 4)
+            self.ncnt += 1
 
     def decode(self):
         while True:

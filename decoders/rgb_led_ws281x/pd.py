@@ -78,14 +78,13 @@ class Decoder(srd.Decoder):
                          [2, ['#%06x' % rgb]])
                 self.bits = []
                 self.ss_packet = None
-        else:
-            if len(self.bits) == 32:
-                grb = reduce(lambda a, b: (a << 1) | b, self.bits)
-                rgb = (grb & 0xff0000) >> 8 | (grb & 0x00ff00) << 8 | (grb & 0xff0000ff)
-                self.put(self.ss_packet, samplenum, self.out_ann,
-                         [2, ['#%08x' % rgb]])
-                self.bits = []
-                self.ss_packet = None
+        elif len(self.bits) == 32:
+            grb = reduce(lambda a, b: (a << 1) | b, self.bits)
+            rgb = (grb & 0xff0000) >> 8 | (grb & 0x00ff00) << 8 | (grb & 0xff0000ff)
+            self.put(self.ss_packet, samplenum, self.out_ann,
+                     [2, ['#%08x' % rgb]])
+            self.bits = []
+            self.ss_packet = None
 
     def decode(self):
         if not self.samplerate:
@@ -102,12 +101,12 @@ class Decoder(srd.Decoder):
             # Check RESET condition (manufacturer recommends 50 usec minimal,
             # but real minimum is ~10 usec).
             if not self.inreset and not pin and self.es is not None and \
-                    self.ss is not None and \
-                    (self.samplenum - self.es) / self.samplerate > 50e-6:
+                        self.ss is not None and \
+                        (self.samplenum - self.es) / self.samplerate > 50e-6:
 
                 # Decode last bit value.
                 tH = (self.es - self.ss) / self.samplerate
-                bit_ = True if tH >= 625e-9 else False
+                bit_ = tH >= 625e-9
 
                 self.bits.append(bit_)
                 self.handle_bits(self.es)

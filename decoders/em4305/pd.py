@@ -72,7 +72,7 @@ class Decoder(srd.Decoder):
         self.samplerate = None
         self.last_samplenum = None
         self.state = 'FFS_SEARCH'
-        self.bits_pos = [[0 for col in range(3)] for row in range(70)]
+        self.bits_pos = [[0 for _ in range(3)] for _ in range(70)]
         self.br_string = ['RF/8', 'RF/16', 'Unused', 'RF/32', 'RF/40',
                           'Unused', 'Unused', 'RF/64',]
         self.encoder = ['not used', 'Manchester', 'Bi-phase', 'not used']
@@ -165,13 +165,13 @@ class Decoder(srd.Decoder):
 
         self.put4bits(idx+2)
         bits = self.bits_pos[idx+7][0]<<3 | self.bits_pos[idx+9][0]<<2 | \
-               self.bits_pos[idx+10][0]<<1 | self.bits_pos[idx+11][0]<<0
+                   self.bits_pos[idx+10][0]<<1 | self.bits_pos[idx+11][0]<<0
         self.put(self.bits_pos[idx+7][1], self.bits_pos[idx+11][2], self.out_ann,
                [10, ['%X' % bits]])
         self.put4bits(idx+13)
         self.put4bits(idx+19)
         bits = self.bits_pos[idx+24][0]<<3 | self.bits_pos[idx+25][0]<<2 | \
-               self.bits_pos[idx+27][0]<<1 | self.bits_pos[idx+28][0]<<0
+                   self.bits_pos[idx+27][0]<<1 | self.bits_pos[idx+28][0]<<0
         self.put(self.bits_pos[idx+24][1], self.bits_pos[idx+28][2], self.out_ann,
                [10, ['%X' % bits]])
         self.put(self.bits_pos[idx+30][1], self.bits_pos[idx+34][2],
@@ -183,7 +183,7 @@ class Decoder(srd.Decoder):
 
     def get_8_bits(self, idx):
         retval = 0
-        for i in range(0, 8):
+        for i in range(8):
             retval <<= 1
             retval |= self.bits_pos[i+idx][0]
         return retval
@@ -197,9 +197,7 @@ class Decoder(srd.Decoder):
                self.bits_pos[idx+2][0]<<2 | self.bits_pos[idx+3][0]<<3
 
     def print_row_parity(self, idx, length):
-        parity = 0
-        for i in range(0, length):
-            parity += self.bits_pos[i+idx][0]
+        parity = sum(self.bits_pos[i+idx][0] for i in range(length))
         parity = parity & 0x1
         if parity == self.bits_pos[idx+length][0]:
             self.put(self.bits_pos[idx+length][1], self.bits_pos[idx+length][2], self.out_ann,
@@ -356,31 +354,30 @@ class Decoder(srd.Decoder):
                              self.out_ann, [3, ['Write mode exit']])
                     self.put_fields()
 
-            if self.state == 'FFS_SEARCH':
-                if pl > self.ffs:
-                    self.gap_detected = 1
-                    self.put(self.last_samplenum, self.samplenum,
-                             self.out_ann, [1, ['First field stop', 'Field stop', 'FFS']])
-                    self.state = 'FFS_DETECTED'
+            if self.state == 'FFS_SEARCH' and pl > self.ffs:
+                self.gap_detected = 1
+                self.put(self.last_samplenum, self.samplenum,
+                         self.out_ann, [1, ['First field stop', 'Field stop', 'FFS']])
+                self.state = 'FFS_DETECTED'
 
             if self.gap_detected == 1:
                 self.gap_detected = 0
                 if (self.last_samplenum - self.old_gap_end) > self.wzmin \
-                        and (self.last_samplenum - self.old_gap_end) < self.wzmax:
+                            and (self.last_samplenum - self.old_gap_end) < self.wzmax:
                     self.put(self.old_gap_end, self.samplenum,
                              self.out_ann, [0, ['0']])
                     self.add_bits_pos(0, self.old_gap_end, self.samplenum)
                 if (self.last_samplenum - self.old_gap_end) > self.womax \
-                        and (self.last_samplenum-self.old_gap_end) < self.nogap:
+                            and (self.last_samplenum-self.old_gap_end) < self.nogap:
                     # One or more 1 bits
                     one_bits = (int)((self.last_samplenum - self.old_gap_end) / self.womax)
-                    for ox in range(0, one_bits):
+                    for ox in range(one_bits):
                         bs = (int)(self.old_gap_end+ox*self.womax)
                         be = (int)(self.old_gap_end+ox*self.womax + self.womax)
                         self.put(bs, be, self.out_ann, [0, ['1']])
                         self.add_bits_pos(1, bs, be)
                     if (self.samplenum - self.last_samplenum) > self.wzmin \
-                            and (self.samplenum - self.last_samplenum) < self.wzmax:
+                                and (self.samplenum - self.last_samplenum) < self.wzmax:
                         bs = (int)(self.old_gap_end+one_bits*self.womax)
                         self.put(bs, self.samplenum, self.out_ann, [0, ['0']])
                         self.add_bits_pos(0, bs, self.samplenum)

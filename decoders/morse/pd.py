@@ -203,17 +203,14 @@ class Decoder(srd.Decoder):
                         s0 = t0
                     s1 = t1
                     sequence += (sunits,)
-                else:
-                    # Generate "flush" for end of letter, end of word.
-                    if sunits >= 3:
-                        do_yield = True
+                elif sunits >= 3:
+                    do_yield = True
             else:
                 do_yield = True
-            if do_yield:
-                if sequence:
-                    yield (s0, s1, alphabet.get(sequence, encode_ditdah(sequence)))
-                    sequence = ()
-                    s0 = s1 = None
+            if do_yield and sequence:
+                yield (s0, s1, alphabet.get(sequence, encode_ditdah(sequence)))
+                sequence = ()
+                s0 = s1 = None
             if item is None:
                 yield None # Pass through flush of 5+ space.
 
@@ -243,8 +240,7 @@ class Decoder(srd.Decoder):
             else:
                 do_yield = True
 
-            if do_yield: # Flush of word.
-                if word:
-                    self.put(s0, s1, self.out_ann, [4, [word]])
-                    word = ''
-                    s0 = s1 = None
+            if do_yield and word:
+                self.put(s0, s1, self.out_ann, [4, [word]])
+                word = ''
+                s0 = s1 = None

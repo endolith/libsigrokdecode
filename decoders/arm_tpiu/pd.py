@@ -78,15 +78,14 @@ class Decoder(srd.Decoder):
             # Odd bytes can be stream ID or data.
             delayed_stream_change = None
             lowbit = (lowbits >> (i // 2)) & 0x01
-            if buf[i][2] & 0x01 != 0:
-                if lowbit:
-                    delayed_stream_change = buf[i][2] >> 1
-                else:
-                    self.stream_changed(buf[i][0], buf[i][2] >> 1)
-            else:
+            if buf[i][2] & 0x01 == 0:
                 byte = buf[i][2] | lowbit
                 self.emit_byte(buf[i][0], buf[i][1], byte)
 
+            elif lowbit:
+                delayed_stream_change = buf[i][2] >> 1
+            else:
+                self.stream_changed(buf[i][0], buf[i][2] >> 1)
             # Even bytes are always data.
             if i < 14:
                 self.emit_byte(buf[i+1][0], buf[i+1][1], buf[i+1][2])

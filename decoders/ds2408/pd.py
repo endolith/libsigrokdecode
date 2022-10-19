@@ -61,8 +61,7 @@ class Decoder(srd.Decoder):
 
         if code == 'RESET/PRESENCE':
             self.ss, self.es = ss, es
-            self.putx([0, ['Reset/presence: %s'
-                           % ('true' if val else 'false')]])
+            self.putx([0, [f"Reset/presence: {'true' if val else 'false'}"]])
             self.bytes = []
         elif code == 'ROM':
             self.ss, self.es = ss, es
@@ -71,59 +70,59 @@ class Decoder(srd.Decoder):
             self.bytes = []
         elif code == 'DATA':
             self.bytes.append(val)
-            if 1 == len(self.bytes):
+            if len(self.bytes) == 1:
                 self.ss, self.es = ss, es
                 if val not in command:
                     self.putx([0, ['Unrecognized command: 0x%02x' % val]])
                 else:
                     self.putx([0, ['%s (0x%02x)' % (command[val], val)]])
-            elif 0xf0 == self.bytes[0]: # Read PIO Registers
-                if 2 == len(self.bytes):
+            elif self.bytes[0] == 0xF0: # Read PIO Registers
+                if len(self.bytes) == 2:
                     self.ss = ss
-                elif 3 == len(self.bytes):
+                elif len(self.bytes) == 3:
                     self.es = es
                     self.putx([0, ['Target address: 0x%04x'
                                    % ((self.bytes[2] << 8) + self.bytes[1])]])
-                elif 3 < len(self.bytes):
+                elif len(self.bytes) > 3:
                     self.ss, self.es = ss, es
                     self.putx([0, ['Data: 0x%02x' % self.bytes[-1]]])
-            elif 0xf5 == self.bytes[0]: # Channel Access Read
-                if 2 == len(self.bytes):
+            elif self.bytes[0] == 0xF5: # Channel Access Read
+                if len(self.bytes) == 2:
                     self.ss = ss
-                elif 2 < len(self.bytes):
+                elif len(self.bytes) > 2:
                     self.ss, self.es = ss, es
                     self.putx([0, ['PIO sample: 0x%02x' % self.bytes[-1]]])
-            elif 0x5a == self.bytes[0]: # Channel Access Write
-                if 2 == len(self.bytes):
+            elif self.bytes[0] == 0x5A: # Channel Access Write
+                if len(self.bytes) == 2:
                     self.ss = ss
-                elif 3 == len(self.bytes):
+                elif len(self.bytes) == 3:
                     self.es = es
                     if (self.bytes[-1] == (self.bytes[-2] ^ 0xff)):
                       self.putx([0, ['Data: 0x%02x (bit-inversion correct: 0x%02x)' % (self.bytes[-2], self.bytes[-1])]])
                     else:
                       self.putx([0, ['Data error: second byte (0x%02x) is not bit-inverse of first (0x%02x)' % (self.bytes[-1], self.bytes[-2])]])
-                elif 3 < len(self.bytes):
+                elif len(self.bytes) > 3:
                     self.ss, self.es = ss, es
-                    if 0xaa == self.bytes[-1]:
-                      self.putx([0, ['Success']])
-                    elif 0xff == self.bytes[-1]:
-                      self.putx([0, ['Fail New State']])
-            elif 0xcc == self.bytes[0]: # Write Conditional Search Register
-                if 2 == len(self.bytes):
+                    if self.bytes[-1] == 0xAA:
+                        self.putx([0, ['Success']])
+                    elif self.bytes[-1] == 0xFF:
+                        self.putx([0, ['Fail New State']])
+            elif self.bytes[0] == 0xCC: # Write Conditional Search Register
+                if len(self.bytes) == 2:
                     self.ss = ss
-                elif 3 == len(self.bytes):
+                elif len(self.bytes) == 3:
                     self.es = es
                     self.putx([0, ['Target address: 0x%04x'
                                    % ((self.bytes[2] << 8) + self.bytes[1])]])
-                elif 3 < len(self.bytes):
+                elif len(self.bytes) > 3:
                     self.ss, self.es = ss, es
                     self.putx([0, ['Data: 0x%02x' % self.bytes[-1]]])
-            elif 0xc3 == self.bytes[0]: # Reset Activity Latches
-                if 2 == len(self.bytes):
+            elif self.bytes[0] == 0xC3: # Reset Activity Latches
+                if len(self.bytes) == 2:
                     self.ss = ss
-                elif 2 < len(self.bytes):
+                elif len(self.bytes) > 2:
                     self.ss, self.es = ss, es
-                    if 0xaa == self.bytes[-1]:
-                      self.putx([0, ['Success']])
+                    if self.bytes[-1] == 0xAA:
+                        self.putx([0, ['Success']])
                     else:
-                      self.putx([0, ['Invalid byte']])
+                        self.putx([0, ['Invalid byte']])

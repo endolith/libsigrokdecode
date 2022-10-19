@@ -123,8 +123,7 @@ class Decoder(srd.Decoder):
                        'SS: %d' % self.packet[1], 'SS'])
         elif self.packet[0] == 0x02: # End Power Transfer
             reason = end_codes[self.packet[1]] if self.packet[1] < len(end_codes) else 'Reserved'
-            self.putp(['End Power Transfer: %s' % reason,
-                       'EPT: %s' % reason, 'EPT'])
+            self.putp([f'End Power Transfer: {reason}', f'EPT: {reason}', 'EPT'])
         elif self.packet[0] == 0x03: # Control Error
             val = self.packet[1] if self.packet[1] < 128 else (self.packet[1] & 0x7f) - 128
             self.putp(['Control Error: %d' % val, 'CE: %d' % val, 'CE'])
@@ -151,17 +150,21 @@ class Decoder(srd.Decoder):
                        (powerclass, maxpower, prop, count, winsize, winoff),
                        'Configuration', 'C'])
         elif self.packet[0] == 0x71: # Identification
-            version = '%d.%d' % ((self.packet[1] & 0xf0) >> 4, self.packet[1] & 0x0f)
             mancode = '%02x%02x' % (self.packet[2], self.packet[3])
             devid = '%02x%02x%02x%02x' % (self.packet[4] & ~0x80,
                     self.packet[5], self.packet[6], self.packet[7])
-            self.putp(['Identification: Version = %s, Manufacturer = %s, ' \
-                       'Device = %s' % (version, mancode, devid),
-                       'ID: %s %s %s' % (version, mancode, devid), 'ID'])
+            version = '%d.%d' % ((self.packet[1] & 0xf0) >> 4, self.packet[1] & 0x0f)
+            self.putp(
+                [
+                    f'Identification: Version = {version}, Manufacturer = {mancode}, Device = {devid}',
+                    f'ID: {version} {mancode} {devid}',
+                    'ID',
+                ]
+            )
+
         elif self.packet[0] == 0x81: # Extended Identification
             edevid = '%02x%02x%02x%02x%02x%02x%02x%02x' % self.packet[1:-1]
-            self.putp(['Extended Identification: %s' % edevid,
-                       'EI: %s' % edevid, 'EI'])
+            self.putp([f'Extended Identification: {edevid}', f'EI: {edevid}', 'EI'])
         elif self.packet[0] in (0x18, 0x19, 0x28, 0x29, 0x38, 0x48, 0x58, 0x68,
                 0x78, 0x85, 0xa4, 0xc4, 0xe2): # Proprietary
             self.putp(['Proprietary', 'P'])
@@ -169,7 +172,7 @@ class Decoder(srd.Decoder):
             self.putp(['Unknown', '?'])
         self.put(self.bytesi[-1], self.samplenum, self.out_ann,
                  [6, ['Checksum OK', 'OK']] if \
-                 calc_checksum(self.packet) == self.packet[-1]
+                     calc_checksum(self.packet) == self.packet[-1]
                  else [6, ['Checksum error', 'ERR']])
 
     def process_byte(self):
@@ -199,7 +202,7 @@ class Decoder(srd.Decoder):
         self.bitsi.append(self.samplenum)
 
         if self.state == 'IDLE' and len(self.bits) >= 5 and \
-                                    self.bits[-5:] == [1, 1, 1, 1, 0]:
+                                        self.bits[-5:] == [1, 1, 1, 1, 0]:
             self.state = 'DATA'
             self.bytestart = self.bitsi[-2]
             self.bits = [0]

@@ -93,15 +93,15 @@ class Decoder(srd.Decoder):
         # Calculate the sample rate.
         samplerate = '?'
         if self.ss_block is not None and \
-            self.first_sample is not None and \
-            self.ss_block > self.first_sample and \
-            self.samplerate:
+                self.first_sample is not None and \
+                self.ss_block > self.first_sample and \
+                self.samplerate:
             samplerate = '%d' % (self.samplesreceived *
                 self.samplerate / (self.ss_block -
                 self.first_sample))
 
         return 'I²S: %d %d-bit samples received at %sHz' % \
-            (self.samplesreceived, self.wordlength, samplerate)
+                (self.samplesreceived, self.wordlength, samplerate)
 
     def wav_header(self):
         # Chunk descriptor
@@ -148,18 +148,17 @@ class Decoder(srd.Decoder):
 
                 sck = self.wait({0: 'f'})
 
-                idx = 0 if not self.oldws else 1
-                c1 = 'Left channel' if not self.oldws else 'Right channel'
-                c2 = 'Left' if not self.oldws else 'Right'
-                c3 = 'L' if not self.oldws else 'R'
+                idx = 1 if self.oldws else 0
+                c1 = 'Right channel' if self.oldws else 'Left channel'
+                c2 = 'Right' if self.oldws else 'Left'
+                c3 = 'R' if self.oldws else 'L'
                 v = '%08x' % self.data
                 self.putpb(['DATA', [c3, self.data]])
-                self.putb([idx, ['%s: %s' % (c1, v), '%s: %s' % (c2, v),
-                                 '%s: %s' % (c3, v), c3]])
+                self.putb([idx, [f'{c1}: {v}', f'{c2}: {v}', f'{c3}: {v}', c3]])
                 self.putbin([0, self.wav_sample(self.data)])
 
                 # Check that the data word was the correct length.
-                if self.wordlength != -1 and self.wordlength != self.bitcount:
+                if self.wordlength not in [-1, self.bitcount]:
                     self.putb([2, ['Received %d-bit word, expected %d-bit '
                                    'word' % (self.bitcount, self.wordlength)]])
 

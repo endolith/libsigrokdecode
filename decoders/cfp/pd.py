@@ -88,8 +88,7 @@ class Decoder(srd.Decoder):
             if clause45_addr in range(0x8000, 0x807F + 1):
                 self.putx([0, ['CFP NVR 1: Basic ID register', 'NVR1']])
                 if clause45_addr == 0x8000:
-                    self.putx([1, ['Module identifier: %s' % \
-                              MODULE_ID.get(reg, 'Reserved')]])
+                    self.putx([1, [f"Module identifier: {MODULE_ID.get(reg, 'Reserved')}"]])
             elif clause45_addr in range(0x8080, 0x80FF + 1):
                 self.putx([0, ['CFP NVR 2: Extended ID register', 'NVR2']])
             elif clause45_addr in range(0x8100, 0x817F + 1):

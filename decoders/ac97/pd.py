@@ -32,8 +32,11 @@ class ChannelError(Exception):
 Pin = SrdIntEnum.from_str('Pin', 'SYNC BIT_CLK SDATA_OUT SDATA_IN RESET')
 
 slots = 'TAG ADDR DATA 03 04 05 06 07 08 09 10 11 IO'.split()
-a = 'BITS_OUT BITS_IN SLOT_RAW_OUT SLOT_RAW_IN WARN ERROR'.split() + \
-    ['SLOT_OUT_' + s for s in slots] + ['SLOT_IN_' + s for s in slots]
+a = (
+    'BITS_OUT BITS_IN SLOT_RAW_OUT SLOT_RAW_IN WARN ERROR'.split()
+    + [f'SLOT_OUT_{s}' for s in slots]
+) + [f'SLOT_IN_{s}' for s in slots]
+
 Ann = SrdIntEnum.from_list('Ann', a)
 
 Bin = SrdIntEnum.from_str('Bin', 'FRAME_OUT FRAME_IN SLOT_RAW_OUT SLOT_RAW_IN')
@@ -157,8 +160,7 @@ class Decoder(srd.Decoder):
         if not bits:
             return 0
         count = len(bits)
-        value = sum([2 ** (count - 1 - i) for i in range(count) if bits[i]])
-        return value
+        return sum(2 ** (count - 1 - i) for i in range(count) if bits[i])
 
     def bits_to_bin_ann(self, bits):
         # Convert MSB-first bit sequence to binary annotation data.
@@ -179,8 +181,7 @@ class Decoder(srd.Decoder):
     def int_to_nibble_text(self, value, bitcount):
         # Convert number to hex digits for given bit count.
         digits = (bitcount + 3) // 4
-        text = '{{:0{:d}x}}'.format(digits).format(value)
-        return text
+        return '{{:0{:d}x}}'.format(digits).format(value)
 
     def get_bit_field(self, data, size, off, count):
         shift = size - off - count

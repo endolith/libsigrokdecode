@@ -72,7 +72,7 @@ class Decoder(srd.Decoder):
         self.cs_start = 0
 
     def putreg(self, ss, es, reg, value):
-        self.put(ss, es, self.out_ann, [ann_reg, ['%s: %s' % (reg, value)]])
+        self.put(ss, es, self.out_ann, [ann_reg, [f'{reg}: {value}']])
 
     def putdigit(self, ss, es, digit, value):
         self.put(ss, es, self.out_ann, [ann_digit, ['Digit %d: %02X' % (digit, value)]])
@@ -106,10 +106,9 @@ class Decoder(srd.Decoder):
             if self.cs_asserted:
                 self.pos = 0
                 self.cs_start = ss
-            else:
-                if self.pos == 1:
-                    # Don't warn if pos=0 so that CS# glitches don't appear
-                    # as spurious warnings.
-                    self.putwarn(self.cs_start, es, 'Short write')
-                elif self.pos > 2:
-                    self.putwarn(self.cs_start, es, 'Overlong write')
+            elif self.pos == 1:
+                # Don't warn if pos=0 so that CS# glitches don't appear
+                # as spurious warnings.
+                self.putwarn(self.cs_start, es, 'Short write')
+            elif self.pos > 2:
+                self.putwarn(self.cs_start, es, 'Overlong write')

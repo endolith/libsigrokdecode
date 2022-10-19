@@ -147,15 +147,14 @@ class Decoder(srd.Decoder):
                 if self.type == '':
                     return
                 if not self.stack:
-                    self.putb([18, ['%s' % (self.type)]])
+                    self.putb([18, [f'{self.type}']])
                     return
                 if self.type == 'RxStatus':
                     rxstatus = (self.stack.pop() << 8) | self.stack.pop()
                     reauth_req = (rxstatus & 0x800) != 0
                     ready = (rxstatus & 0x400) != 0
                     length = rxstatus & 0x3ff
-                    text = '%s, reauth %s, ready %s, length %s' % \
-                        (self.type, reauth_req, ready, length)
+                    text = f'{self.type}, reauth {reauth_req}, ready {ready}, length {length}'
                     self.putb([18, [text]])
                 elif self.type == '1.4 Bstatus':
                     bstatus = (self.stack.pop() << 8) | self.stack.pop()
@@ -164,17 +163,15 @@ class Decoder(srd.Decoder):
                     depth = ((bstatus & 0x700) >> 8)
                     max_cascase_exceeded = bstatus & 0x800
                     hdmi_mode = (bstatus & 0x1000) != 0
-                    text = '%s, %s devices, depth %s, hdmi mode %s' % \
-                        (self.type, device_count, depth, hdmi_mode)
+                    text = f'{self.type}, {device_count} devices, depth {depth}, hdmi mode {hdmi_mode}'
+
                     self.putb([18, [text]])
                 elif self.type == 'Read_Message':
                     msg = self.stack.pop(0)
-                    self.putb([msg, ['%s, %s' % (self.type,
-                        msg_ids.get(msg, 'Invalid'))]])
+                    self.putb([msg, [f"{self.type}, {msg_ids.get(msg, 'Invalid')}"]])
                 elif self.type == 'Write_Message':
                     msg = self.stack.pop(0)
-                    self.putb([msg, ['%s, %s' % (self.type,
-                        msg_ids.get(msg, 'Invalid'))]])
+                    self.putb([msg, [f"{self.type}, {msg_ids.get(msg, 'Invalid')}"]])
                 elif self.type == 'HDCP2Version':
                     version = self.stack.pop(0)
                     if (version & 0x4):
@@ -182,10 +179,7 @@ class Decoder(srd.Decoder):
                     else:
                         self.putb([18, ['NOT HDCP2']])
                 else:
-                    self.putb([18, ['%s' % (self.type)]])
-            elif cmd == 'DATA READ':
-                # Stack up our data bytes.
-                self.stack.append(databyte)
-            elif cmd == 'DATA WRITE':
+                    self.putb([18, [f'{self.type}']])
+            elif cmd in ['DATA READ', 'DATA WRITE']:
                 # Stack up our data bytes.
                 self.stack.append(databyte)

@@ -158,7 +158,7 @@ class Decoder(srd.Decoder):
             if value is False:
                 self.put(int(ss), int(es), self.out_ann, [1, ['ERROR']])
             else:
-                self.put(int(ss), int(es), self.out_ann, [0, ['{}'.format(value)]])
+                self.put(int(ss), int(es), self.out_ann, [0, [f'{value}']])
 
             if value is False:
                 numbits = 0
@@ -172,14 +172,14 @@ class Decoder(srd.Decoder):
             bitvalue |= value << numbits
             numbits += 1
 
-            bitstring += '{}'.format(value)
+            bitstring += f'{value}'
             if numbits % 4 == 0:
                 bitstring += ' '
 
         if not numbits:
             return
 
-        self.put(int(stringstart), int(stringend), self.out_ann, [1, ['{}'.format(bitstring)]])
+        self.put(int(stringstart), int(stringend), self.out_ann, [1, [f'{bitstring}']])
 
         numbytes = numbits // 8 + (numbits % 8 > 0)
         bytestring = bitvalue.to_bytes(numbytes, 'little')

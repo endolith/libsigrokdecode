@@ -78,31 +78,36 @@ class Ann:
 
     @staticmethod
     def enum_indices():
-        return [i for i in range(Ann.ENUMS)]
+        return list(range(Ann.ENUMS))
 
     @staticmethod
     def get_enum_idx(code):
-        if code in range(_max_enum_slots):
-            return Ann.ENUM_0 + code
-        return Ann.ENUM_OVR
+        return Ann.ENUM_0 + code if code in range(_max_enum_slots) else Ann.ENUM_OVR
 
 def _channel_decl(count):
-    return tuple([
-        {'id': 'bit{}'.format(i), 'name': 'Bit{}'.format(i), 'desc': 'Bit position {}'.format(i)}
+    return tuple(
+        {'id': f'bit{i}', 'name': f'Bit{i}', 'desc': f'Bit position {i}'}
         for i in range(count)
-    ])
+    )
 
 def _enum_cls_decl(count):
-    return tuple([
-        ('enum{}'.format(i), 'Enumeration slot {}'.format(i))
-        for i in range(count)
-    ] + [('enumovr', 'Enumeration overflow')])
+    return tuple(
+        (
+            [(f'enum{i}', f'Enumeration slot {i}') for i in range(count)]
+            + [('enumovr', 'Enumeration overflow')]
+        )
+    )
 
 def _enum_rows_decl(count):
-    return tuple([
-        ('enums{}'.format(i), 'Enumeration slots {}'.format(i), (Ann.ENUM_0 + i,))
-        for i in range(count)
-    ] + [('enumsovr', 'Enumeration overflows', (Ann.ENUM_OVR,))])
+    return tuple(
+        (
+            [
+                (f'enums{i}', f'Enumeration slots {i}', (Ann.ENUM_0 + i,))
+                for i in range(count)
+            ]
+            + [('enumsovr', 'Enumeration overflows', (Ann.ENUM_OVR,))]
+        )
+    )
 
 class Decoder(srd.Decoder):
     api_version = 3
@@ -167,8 +172,7 @@ class Decoder(srd.Decoder):
         bits = pins + (None,) * self.bitcount
         bits = bits[:self.bitcount]
         bits = [b if b in (0, 1) else 0 for b in bits]
-        pattern = bitpack(bits)
-        return pattern
+        return bitpack(bits)
 
     def handle_pattern(self, ss, es, pattern):
         fmt = '{{:0{}b}}'.format(self.bitcount)
@@ -195,24 +199,22 @@ class Decoder(srd.Decoder):
                 self.putpy(ss, es, 'ENUM', (value, formatted))
 
     def interp_unsigned(self, ss, es, pattern):
-        value = pattern
-        return value
+        return pattern
 
     def interp_signed(self, ss, es, pattern):
-        if not 'signmask' in self.interp_state:
+        if 'signmask' not in self.interp_state:
             self.interp_state.update({
                 'signmask': 1 << (self.bitcount - 1),
                 'signfull': 1 << self.bitcount,
             })
-        is_neg = pattern & self.interp_state['signmask']
-        if is_neg:
-            value = -(self.interp_state['signfull'] - pattern)
-        else:
-            value = pattern
-        return value
+        return (
+            -(self.interp_state['signfull'] - pattern)
+            if (is_neg := pattern & self.interp_state['signmask'])
+            else pattern
+        )
 
     def interp_fixpoint(self, ss, es, pattern):
-        if not 'fixdiv' in self.interp_state:
+        if 'fixdiv' not in self.interp_state:
             self.interp_state.update({
                 'fixsign': self.options['interp'] == 'fixsigned',
                 'fixdiv': 2 ** self.options['fracbits'],
@@ -225,7 +227,7 @@ class Decoder(srd.Decoder):
         return value
 
     def interp_ieee754(self, ss, es, pattern):
-        if not 'ieee_has_16bit' in self.interp_state:
+        if 'ieee_has_16bit' not in self.interp_state:
             self.interp_state.update({
                 'ieee_fmt_int_16': '=H',
                 'ieee_fmt_flt_16': '=e',
@@ -236,7 +238,7 @@ class Decoder(srd.Decoder):
             })
             try:
                 fmt = self.interp_state.update['ieee_fmt_flt_16']
-                has_16bit_support = 8 * struct.calcsize(fmt) == 16
+                has_16bit_support = struct.calcsize(fmt) == 2
             except:
                 has_16bit_support = False
             self.interp_state['ieee_has_16bit'] = has_16bit_support
@@ -257,7 +259,7 @@ class Decoder(srd.Decoder):
         return None
 
     def interp_enum(self, ss, es, pattern):
-        if not 'enum_map' in self.interp_state:
+        if 'enum_map' not in self.interp_state:
             self.interp_state.update({
                 'enum_fn': self.options['mapping'],
                 'enum_map': {},
@@ -282,7 +284,7 @@ class Decoder(srd.Decoder):
                     # level, and assume that it's a dictionary.
                     py_table = {}
                     exec(maptext, py_table)
-                    maptable.update(py_table['enumtext'])
+                    maptable |= py_table['enumtext']
                 self.interp_state['enum_map'].update(maptable)
                 self.interp_state['enum_have_map'] = True
             except:
@@ -301,7 +303,7 @@ class Decoder(srd.Decoder):
         return value
 
     def format_native(self, ss, es, value):
-        return ['{}'.format(value),]
+        return [f'{value}']
 
     def format_bin(self, ss, es, value):
         if not self.format_string:

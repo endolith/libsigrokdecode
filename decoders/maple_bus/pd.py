@@ -199,7 +199,7 @@ class Decoder(srd.Decoder):
             elif self.matched[1]:
                 if counta == countb + 1:
                     self.got_bit(sdcka)
-                    countb = countb + 1
+                    countb += 1
                 elif counta == 0 and countb == 0 and sdcka == 1 and initial:
                     self.ss = self.samplenum
                     initial = False

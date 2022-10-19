@@ -115,22 +115,23 @@ class Decoder(srd.Decoder):
         self.put(self.ss_start, self.ss_other_edge, self.out_ann,
                  [Ann.AGC, ['AGC pulse', 'AGC', 'A']])
         idx = Ann.LONG_PAUSE if p == 'Long' else Ann.SHORT_PAUSE
-        self.put(self.ss_other_edge, self.samplenum, self.out_ann, [idx, [
-            '{} pause'.format(p),
-            '{}-pause'.format(p[0]),
-            '{}P'.format(p[0]),
-            'P',
-        ]])
+        self.put(
+            self.ss_other_edge,
+            self.samplenum,
+            self.out_ann,
+            [idx, [f'{p} pause', f'{p[0]}-pause', f'{p[0]}P', 'P']],
+        )
 
     def putremote(self):
         dev = address.get(self.addr, 'Unknown device')
         buttons = command.get(self.addr, {})
         btn = buttons.get(self.cmd, ['Unknown', 'Unk'])
-        self.put(self.ss_remote, self.ss_bit + self.stop, self.out_ann, [Ann.REMOTE, [
-            '{}: {}'.format(dev, btn[0]),
-            '{}: {}'.format(dev, btn[1]),
-            '{}'.format(btn[1]),
-        ]])
+        self.put(
+            self.ss_remote,
+            self.ss_bit + self.stop,
+            self.out_ann,
+            [Ann.REMOTE, [f'{dev}: {btn[0]}', f'{dev}: {btn[1]}', f'{btn[1]}']],
+        )
 
     def __init__(self):
         self.reset()
@@ -185,7 +186,7 @@ class Decoder(srd.Decoder):
         if len(self.data) == want_len:
             if self.state == 'ADDRESS':
                 self.addr = normal
-            if self.state == 'COMMAND':
+            elif self.state == 'COMMAND':
                 self.cmd = normal
             self.putd(show, want_len)
             self.ss_start = self.samplenum

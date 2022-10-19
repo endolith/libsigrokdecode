@@ -184,7 +184,7 @@ class PraccState(object):
         self.reset()
 
 regs_items = {
-    'ann': tuple([tuple([s.lower(), s]) for s in list(ejtag_reg.values())]),
+    'ann': tuple((s.lower(), s) for s in list(ejtag_reg.values())),
     'rows_range': tuple(range(1, 1 + 9)),
 }
 
@@ -237,26 +237,20 @@ class Decoder(srd.Decoder):
         control_out = bin2int(self.last_data['out']['data'][0])
 
         # Check if JTAG master acknowledges a pending PrAcc.
-        if not ((not (control_in & ControlReg.PRACC)) and \
-                (control_out & ControlReg.PRACC)):
+        if control_in & ControlReg.PRACC or not control_out & ControlReg.PRACC:
             return
 
         ss, es = self.pracc_state.ss, self.pracc_state.es
         pracc_write = (control_out & ControlReg.PRNW) != 0
 
-        s = 'PrAcc: '
-        s += 'Store' if pracc_write else 'Load/Fetch'
-
+        s = 'PrAcc: ' + ('Store' if pracc_write else 'Load/Fetch')
+        if self.pracc_state.address_out is not None:
+            s += ', A:' + ' 0x{:08X}'.format(self.pracc_state.address_out)
         if pracc_write:
-            if self.pracc_state.address_out is not None:
-                s += ', A:' + ' 0x{:08X}'.format(self.pracc_state.address_out)
             if self.pracc_state.data_out is not None:
                 s += ', D:' + ' 0x{:08X}'.format(self.pracc_state.data_out)
-        else:
-            if self.pracc_state.address_out is not None:
-                s += ', A:' + ' 0x{:08X}'.format(self.pracc_state.address_out)
-            if self.pracc_state.data_in is not None:
-                s += ', D:' + ' 0x{:08X}'.format(self.pracc_state.data_in)
+        elif self.pracc_state.data_in is not None:
+            s += ', D:' + ' 0x{:08X}'.format(self.pracc_state.data_in)
 
         self.pracc_state.reset()
 
@@ -290,7 +284,7 @@ class Decoder(srd.Decoder):
             value_str = control_data[end_bit : start_bit + 1]
             value_index = bin2int(value_str)
 
-            short_desc = comment + ': ' + value_str
+            short_desc = f'{comment}: {value_str}'
             long_desc = value_descriptions[value_index] if len(value_descriptions) > value_index else '?'
 
             self.put_at(ss, es, [ann, [long_desc, short_desc]])
@@ -300,10 +294,6 @@ class Decoder(srd.Decoder):
             self.last_data = {'in': {}, 'out': {}}
 
     def handle_fastdata(self, val, ann):
-        spracc_write_desc = {
-            0: ['0', 'SPrAcc: 0', 'Request completion of Fastdata access'],
-            1: ['1', 'SPrAcc: 1', 'No effect'],
-        }
         spracc_read_desc = {
             0: ['0', 'SPrAcc: 0', 'Fastdata access failure'],
             1: ['1', 'SPrAcc: 1', 'Successful completion of Fastdata access'],
@@ -312,7 +302,7 @@ class Decoder(srd.Decoder):
         bitstring = val[0]
         bit_sample_pos = val[1]
         fastdata_state = bitstring[32]
-        data = bin2int(bitstring[0:32])
+        data = bin2int(bitstring[:32])
 
         fastdata_bit_pos = bit_sample_pos[32]
         data_pos = [bit_sample_pos[31][0], bit_sample_pos[0][1]]
@@ -324,6 +314,10 @@ class Decoder(srd.Decoder):
         spracc_display_data = []
 
         if ann == Ann.CONTROL_FIELD_IN:
+            spracc_write_desc = {
+                0: ['0', 'SPrAcc: 0', 'Request completion of Fastdata access'],
+                1: ['1', 'SPrAcc: 1', 'No effect'],
+            }
             spracc_display_data = [ann, spracc_write_desc[int(fastdata_state)]]
         elif ann == Ann.CONTROL_FIELD_OUT:
             spracc_display_data = [ann, spracc_read_desc[int(fastdata_state)]]
@@ -363,11 +357,11 @@ class Decoder(srd.Decoder):
             # Format instruction name.
             insn = ejtag_insn[code]
             s_short = insn[0]
-            s_long = insn[0] + ': ' + insn[1] + ' (' + hexval + ')'
+            s_long = f'{insn[0]}: {insn[1]} ({hexval})'
             # Display it and select data register.
             self.put_current([Ann.INSTRUCTION, [s_long, s_short]])
         else:
-            self.put_current([Ann.INSTRUCTION, [hexval, 'IR TDI ({})'.format(hexval)]])
+            self.put_current([Ann.INSTRUCTION, [hexval, f'IR TDI ({hexval})']])
         self.select_reg(code)
 
     def handle_new_state(self, new_state):

@@ -46,7 +46,7 @@ def calc_crc8(data):
     crc = 0
     for b in data:
         crc ^= b
-        for i in range(8):
+        for _ in range(8):
             odd = crc % 2
             crc >>= 1
             if odd:
@@ -57,7 +57,7 @@ def calc_crc32(data):
     crc = 0xffffffff
     for b in data:
         crc ^= b
-        for i in range(8):
+        for _ in range(8):
             odd = crc % 2
             crc >>= 1
             if odd:
@@ -133,11 +133,11 @@ class Decoder(srd.Decoder):
         # TODO Include the service ID (port number) as well?
         text = []
         if self.frame_rx_id is not None:
-            text.append("RX {}".format(self.frame_rx_id[-1]))
+            text.append(f"RX {self.frame_rx_id[-1]}")
         if self.frame_tx_id is not None:
-            text.append("TX {}".format(self.frame_tx_id[-1]))
+            text.append(f"TX {self.frame_tx_id[-1]}")
         if self.frame_payload_text is not None:
-            text.append("DATA {}".format(self.frame_payload_text))
+            text.append(f"DATA {self.frame_payload_text}")
         if self.frame_has_ack is not None:
             text.append("ACK {:02x}".format(self.frame_has_ack))
         if text:
@@ -154,8 +154,7 @@ class Decoder(srd.Decoder):
             return None
         if idx < 0 and abs(idx) > len(self.field_desc):
             return None
-        desc = self.field_desc[idx]
-        return desc
+        return self.field_desc[idx]
 
     def handle_field_add_desc(self, fmt, hdl, cls = None):
         '''Register description for a PJON frame field.'''
@@ -196,16 +195,13 @@ class Decoder(srd.Decoder):
         b = b[0]
 
         # Provide text presentation, caller emits frame field annotation.
-        if b == 255: # "not assigned"
-            id_txt = 'NA'
-        elif b == 0: # "broadcast"
+        if b == 0:
             id_txt = 'BC'
-        else: # unicast
+        elif b == 255:
+            id_txt = 'NA'
+        else:
             id_txt = '{:d}'.format(b)
-        texts = [
-            'RX_ID {}'.format(id_txt),
-            '{}'.format(id_txt),
-        ]
+        texts = [f'RX_ID {id_txt}', f'{id_txt}']
 
         # Track RX info for communication relation emission.
         self.frame_rx_id = (b, id_txt)
@@ -230,22 +226,20 @@ class Decoder(srd.Decoder):
         self.cfg_pkt_id = b & (1 << 7)
 
         # Get a textual presentation of the flags.
-        text = []
-        text.append('pkt_id' if self.cfg_pkt_id else '-') # packet number
-        text.append('len16' if self.cfg_len16 else '-') # 16bit length not 8bit
-        text.append('crc32' if self.cfg_crc32 else '-') # 32bit CRC not 8bit
-        text.append('svc_id' if self.cfg_port else '-') # port aka service ID
-        text.append('ack_mode' if self.cfg_async_ack else '-') # async response
-        text.append('ack' if self.cfg_sync_ack else '-') # synchronous response
-        text.append('tx_info' if self.cfg_tx_info else '-') # sender address
-        text.append('bus_id' if self.cfg_shared else '-') # "shared" vs "local"
+        text = [
+            'pkt_id' if self.cfg_pkt_id else '-',
+            'len16' if self.cfg_len16 else '-',
+            'crc32' if self.cfg_crc32 else '-',
+            'svc_id' if self.cfg_port else '-',
+            'ack_mode' if self.cfg_async_ack else '-',
+            'ack' if self.cfg_sync_ack else '-',
+            'tx_info' if self.cfg_tx_info else '-',
+            'bus_id' if self.cfg_shared else '-',
+        ]
+
         text = ' '.join(text)
         bits = '{:08b}'.format(b)
-        texts = [
-            'CFG {:s}'.format(text),
-            'CFG {}'.format(bits),
-            bits
-        ]
+        texts = ['CFG {:s}'.format(text), f'CFG {bits}', bits]
 
         # TODO Come up with the most appropriate phrases for this logic.
         # Are separate instruction groups with repeated conditions more
@@ -316,11 +310,11 @@ class Decoder(srd.Decoder):
 
         # Emit warning annotations for invalid flag combinations.
         warn_texts = []
-        wants_ack = self.cfg_sync_ack or self.cfg_async_ack
-        if wants_ack and not self.cfg_tx_info:
-            warn_texts.append('ACK request without TX info')
-        if wants_ack and self.frame_is_broadcast:
-            warn_texts.append('ACK request for broadcast')
+        if wants_ack := self.cfg_sync_ack or self.cfg_async_ack:
+            if not self.cfg_tx_info:
+                warn_texts.append('ACK request without TX info')
+            if self.frame_is_broadcast:
+                warn_texts.append('ACK request for broadcast')
         if self.cfg_sync_ack and self.cfg_async_ack:
             warn_texts.append('sync and async ACK request')
         if self.cfg_len16 and not self.cfg_crc32:
@@ -365,15 +359,12 @@ class Decoder(srd.Decoder):
         desc['format'] = pl_fmt
         desc['width'] = struct.calcsize(pl_fmt)
 
-        # Have the caller emit the annotation for the packet length.
-        # Provide information of different detail level for zooming.
-        texts = [
+        return [
             'LENGTH {:d} (PAYLOAD {:d})'.format(pkt_len, pl_len),
             'LEN {:d} (PL {:d})'.format(pkt_len, pl_len),
             '{:d} ({:d})'.format(pkt_len, pl_len),
             '{:d}'.format(pkt_len),
         ]
-        return texts
 
     def handle_field_common_crc(self, have, is_meta):
         '''Process a CRC field of a PJON frame.'''
@@ -392,19 +383,12 @@ class Decoder(srd.Decoder):
         want = calc_crc32(data) if crc_len == 32 else calc_crc8(data)
         if want != have:
             want_text = crc_fmt.format(want)
-            warn_texts.append('CRC mismatch - want {} have {}'.format(want_text, have_text))
+            warn_texts.append(f'CRC mismatch - want {want_text} have {have_text}')
         if warn_texts:
             warn_texts = ', '.join(warn_texts)
             self.putg(self.ann_ss, self.ann_es, ANN_WARN, [warn_texts])
 
-        # Provide text representation for frame field, caller emits
-        # the annotation.
-        texts = [
-            '{}_CRC {}'.format(caption, have_text),
-            'CRC {}'.format(have_text),
-            have_text,
-        ]
-        return texts
+        return [f'{caption}_CRC {have_text}', f'CRC {have_text}', have_text]
 
     def handle_field_meta_crc(self, b):
         '''Process initial CRC (meta) field of a PJON frame.'''
@@ -430,16 +414,10 @@ class Decoder(srd.Decoder):
 
         # When we get here, there always should be an RX ID already.
         bus_num, bus_txt = self.handle_field_common_bus(b[:4])
-        rx_txt = "{} {}".format(bus_txt, self.frame_rx_id[-1])
+        rx_txt = f"{bus_txt} {self.frame_rx_id[-1]}"
         self.frame_rx_id = (bus_num, self.frame_rx_id[0], rx_txt)
 
-        # Provide text representation for frame field, caller emits
-        # the annotation.
-        texts = [
-            'RX_BUS {}'.format(bus_txt),
-            bus_txt,
-        ]
-        return texts
+        return [f'RX_BUS {bus_txt}', bus_txt]
 
     def handle_field_tx_bus(self, b):
         '''Process transmitter bus ID field of a PJON frame.'''
@@ -449,13 +427,7 @@ class Decoder(srd.Decoder):
         bus_num, bus_txt = self.handle_field_common_bus(b[:4])
         self.frame_tx_id = (bus_num, None, bus_txt)
 
-        # Provide text representation for frame field, caller emits
-        # the annotation.
-        texts = [
-            'TX_BUS {}'.format(bus_txt),
-            bus_txt,
-        ]
-        return texts
+        return [f'TX_BUS {bus_txt}', bus_txt]
 
     def handle_field_tx_id(self, b):
         '''Process transmitter ID field of a PJON frame.'''
@@ -466,16 +438,10 @@ class Decoder(srd.Decoder):
         if self.frame_tx_id is None:
             self.frame_tx_id = (b, id_txt)
         else:
-            tx_txt = "{} {}".format(self.frame_tx_id[-1], id_txt)
+            tx_txt = f"{self.frame_tx_id[-1]} {id_txt}"
             self.frame_tx_id = (self.frame_tx_id[0], b, tx_txt)
 
-        # Provide text representation for frame field, caller emits
-        # the annotation.
-        texts = [
-            'TX_ID {}'.format(id_txt),
-            id_txt,
-        ]
-        return texts
+        return [f'TX_ID {id_txt}', id_txt]
 
     def handle_field_payload(self, b):
         '''Process payload data field of a PJON frame.'''
@@ -484,22 +450,17 @@ class Decoder(srd.Decoder):
         self.frame_payload = b[:]
         self.frame_payload_text = text
 
-        texts = [
-            'PAYLOAD {}'.format(text),
-            text,
-        ]
-        return texts
+        return [f'PAYLOAD {text}', text]
 
     def handle_field_sync_resp(self, b):
         '''Process synchronous response for a PJON frame.'''
 
         self.frame_has_ack = b
 
-        texts = [
+        return [
             'ACK {:02x}'.format(b),
             '{:02x}'.format(b),
         ]
-        return texts
 
     def decode(self, ss, es, data):
         ptype, pdata = data

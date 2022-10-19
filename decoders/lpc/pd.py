@@ -171,7 +171,7 @@ class Decoder(srd.Decoder):
 
         # Output a warning if LAD[3:0] changes while LFRAME# is low.
         # TODO
-        if (self.lad != -1 and self.lad != lad):
+        if self.lad not in [-1, lad]:
             self.putb([0, ['LAD[3:0] changed while LFRAME# was asserted']])
 
         # LFRAME# is asserted (low). Wait until it gets de-asserted again
@@ -189,10 +189,10 @@ class Decoder(srd.Decoder):
 
         # TODO: Warning/error on invalid cycle types.
         if 'Reserved' in self.cycle_type:
-            self.putb([0, ['Invalid cycle type (%s)' % lad_bits]])
+            self.putb([0, [f'Invalid cycle type ({lad_bits})']])
 
         self.es_block = self.samplenum
-        self.putb([2, ['Cycle type: %s' % self.cycle_type]])
+        self.putb([2, [f'Cycle type: {self.cycle_type}']])
         self.ss_block = self.samplenum
 
         self.state = 'GET ADDR'
@@ -328,7 +328,7 @@ class Decoder(srd.Decoder):
 
             # Only look at the signals upon rising LCLK edges. The LPC clock
             # is the same as the PCI clock (which is sampled at rising edges).
-            if not (self.oldlclk == 0 and lclk == 1):
+            if self.oldlclk != 0 or lclk != 1:
                 self.oldlclk = lclk
                 continue
 

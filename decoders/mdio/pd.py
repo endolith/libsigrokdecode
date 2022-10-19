@@ -98,16 +98,16 @@ class Decoder(srd.Decoder):
                 decoded_min += str.format('ADDR: UKWN ')
 
             if self.clause45 and self.opcode > 1 \
-            or (not self.clause45 and self.opcode):
+                or (not self.clause45 and self.opcode):
                 decoded_min += str.format('READ:  %04X' % self.data)
                 is_read = 1
             else:
                 decoded_min += str.format('WRITE: %04X' % self.data)
                 is_read = 0
             decoded_ext = str.format(' %s: %02d' % \
-                        ('PRTAD' if self.clause45 else 'PHYAD', self.portad))
+                            ('PRTAD' if self.clause45 else 'PHYAD', self.portad))
             decoded_ext += str.format(' %s: %02d' % \
-                        ('DEVAD' if self.clause45 else 'REGAD', self.devad))
+                            ('DEVAD' if self.clause45 else 'REGAD', self.devad))
             if self.ta_invalid or self.op_invalid:
                 decoded_ext += ' ERROR'
             self.put(self.ss_frame, self.mdiobits[0][2], self.out_ann,
@@ -115,8 +115,8 @@ class Decoder(srd.Decoder):
 
             self.put(self.ss_frame, self.mdiobits[0][2], self.out_python,
                      [(bool(self.clause45), int(self.clause45_addr), \
-                       bool(is_read), int(self.portad), int(self.devad), \
-                       int(self.data))])
+                           bool(is_read), int(self.portad), int(self.devad), \
+                           int(self.data))])
 
         # Post read increment address.
         if self.clause45 and self.opcode == 2 and self.clause45_addr != -1:
@@ -141,14 +141,13 @@ class Decoder(srd.Decoder):
         self.state = 'PRE'
 
     def state_PRE(self, mdio):
-        if self.illegal_bus:
-            if mdio == 0:   # Stay in illegal bus state.
+        if self.illegal_bus:   # Stay in illegal bus state.
+            if mdio == 0:
                 return
-            else:           # Leave and continue parsing.
-                self.illegal_bus = 0
-                self.put(self.ss_illegal, self.samplenum, self.out_ann,
-                         [4, ['ILLEGAL BUS STATE', 'ILL']])
-                self.ss_frame = self.samplenum
+            self.illegal_bus = 0
+            self.put(self.ss_illegal, self.samplenum, self.out_ann,
+                     [4, ['ILLEGAL BUS STATE', 'ILL']])
+            self.ss_frame = self.samplenum
 
         if self.ss_frame == -1:
             self.ss_frame = self.samplenum
@@ -202,18 +201,13 @@ class Decoder(srd.Decoder):
             self.putff([2, st + ['ST', 'S']])
             self.ss_frame_field = self.samplenum
 
-            if mdio:
-                self.opcode = 2
-            else:
-                self.opcode = 0
+            self.opcode = 2 if mdio else 0
         else:
             if self.clause45:
-                self.state = 'PRTAD'
                 self.opcode += mdio
-            else:
-                if mdio == self.opcode:
-                    self.op_invalid = 'invalid for Clause 22'
-                self.state = 'PRTAD'
+            elif mdio == self.opcode:
+                self.op_invalid = 'invalid for Clause 22'
+            self.state = 'PRTAD'
 
     def state_PRTAD(self, mdio):
         if self.portad == -1:
@@ -231,7 +225,7 @@ class Decoder(srd.Decoder):
                 op = ['OP: READ', 'OP: R'] if self.opcode else ['OP: WRITE', 'OP: W']
             self.putff([2, op + ['OP', 'O']])
             if self.op_invalid:
-                self.putff([4, ['OP %s' % self.op_invalid, 'OP', 'O']])
+                self.putff([4, [f'OP {self.op_invalid}', 'OP', 'O']])
             self.ss_frame_field = self.samplenum
         self.portad_bits -= 1
         self.portad |= mdio << self.portad_bits
@@ -277,7 +271,7 @@ class Decoder(srd.Decoder):
             self.data = 0
             self.putff([2, ['TA', 'T']])
             if self.ta_invalid:
-                self.putff([4, ['TA%s' % self.ta_invalid, 'TA', 'T']])
+                self.putff([4, [f'TA{self.ta_invalid}', 'TA', 'T']])
             self.ss_frame_field = self.samplenum
         self.data_bits -= 1
         self.data |= mdio << self.data_bits
@@ -290,7 +284,7 @@ class Decoder(srd.Decoder):
             self.reset_decoder_state()
 
     def process_state(self, argument, mdio):
-        method_name = 'state_' + str(argument)
+        method_name = f'state_{str(argument)}'
         method = getattr(self, method_name)
         return method(mdio)
 
@@ -301,9 +295,7 @@ class Decoder(srd.Decoder):
     def quartile_cycle_length(self):
         # 48 is the minimum number of samples we have to have at the end of a
         # frame. The last sample only has a leading clock edge and is ignored.
-        bitlen = []
-        for i in range(1, 49):
-            bitlen.append(self.mdiobits[i][2] - self.mdiobits[i][1])
+        bitlen = [self.mdiobits[i][2] - self.mdiobits[i][1] for i in range(1, 49)]
         bitlen = sorted(bitlen)
         return bitlen[12]
 

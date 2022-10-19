@@ -392,8 +392,8 @@ class Decoder(srd.Decoder):
             # wide and narrow for several zoom levels.
             self.insn_dat_bytes.reverse()
             data_txt_digits = ''.join(['{:02x}'.format(b) for b in self.insn_dat_bytes])
-            data_txt_hex = '0x' + data_txt_digits
-            data_txt_prefix = 'Data: ' + data_txt_hex
+            data_txt_hex = f'0x{data_txt_digits}'
+            data_txt_prefix = f'Data: {data_txt_hex}'
             data_txts = [data_txt_prefix, data_txt_hex, data_txt_digits]
             self.insn_dat_bytes = []
 
@@ -415,9 +415,9 @@ class Decoder(srd.Decoder):
                 self.insn_dat_count = self.insn_rd_counts[0]
                 return
 
-            # FALLTHROUGH.
-            # When all operands and data bytes were seen,
-            # terminate the inspection of the instruction.
+                # FALLTHROUGH.
+                # When all operands and data bytes were seen,
+                # terminate the inspection of the instruction.
 
         # Postprocess the instruction after its operands were seen.
         cmd_es = es
@@ -503,25 +503,21 @@ class Decoder(srd.Decoder):
             return
 
         # Get individual fields of the UART frame.
-        bits_num = sum([b.val << pos for pos, b in enumerate(self.bits)])
-        if False:
-            # This logic could detect BREAK conditions which are aligned to
-            # UART frames. Which was obsoleted by the above detection at
-            # arbitrary positions. The code still can be useful to detect
-            # "other kinds of frame errors" which carry valid symbols for
-            # upper layers (the Atmel literature suggests "break", "delay",
-            # and "empty" symbols when PDI is communicated over different
-            # physical layers).
-            if bits_num == 0: # BREAK
-                self.break_ss = self.bits[0].ss
-                self.break_es = es
-                self.bits = []
-                return
-        start_bit = bits_num & 0x01; bits_num >>= 1
-        data_val = bits_num & 0xff; bits_num >>= 8
+        bits_num = sum(b.val << pos for pos, b in enumerate(self.bits))
+        if False and bits_num == 0:
+            self.break_ss = self.bits[0].ss
+            self.break_es = es
+            self.bits = []
+            return
+        start_bit = bits_num & 0x01
+        bits_num >>= 1
+        data_val = bits_num & 0xff
+        bits_num >>= 8
         data_text = '{:02x}'.format(data_val)
-        parity_bit = bits_num & 0x01; bits_num >>= 1
-        stop_bit = bits_num & 0x01; bits_num >>= 1
+        parity_bit = bits_num & 0x01
+        bits_num >>= 1
+        stop_bit = bits_num & 0x01
+        bits_num >>= 1
 
         # Check for frame errors. START _must_ have been low
         # according to the above accumulation logic.
@@ -533,8 +529,13 @@ class Decoder(srd.Decoder):
         for idx in range(frame_bitcount):
             self.put_ann_bit(idx, Ann.BIT)
         put_uart_field(0, Ann.START)
-        self.put(self.bits[1].ss, self.bits[8].es, self.out_ann,
-             [Ann.DATA, ['Data: ' + data_text, 'D: ' + data_text, data_text]])
+        self.put(
+            self.bits[1].ss,
+            self.bits[8].es,
+            self.out_ann,
+            [Ann.DATA, [f'Data: {data_text}', f'D: {data_text}', data_text]],
+        )
+
         put_uart_field(9, Ann.PARITY_OK if parity_ok else Ann.PARITY_ERR)
         put_uart_field(10, Ann.STOP_OK if stop_ok else Ann.STOP_ERR)
 

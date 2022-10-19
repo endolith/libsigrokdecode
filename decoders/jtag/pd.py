@@ -178,7 +178,7 @@ class Decoder(srd.Decoder):
 
         # Upon SHIFT-*/EXIT1-* collect the current TDI/TDO values.
         if self.oldstate.value.startswith('SHIFT-') or \
-           self.oldstate.value.startswith('EXIT1-'):
+               self.oldstate.value.startswith('EXIT1-'):
             if self.first_bit:
                 self.ss_bitstring = self.samplenum
                 self.first_bit = False
@@ -201,23 +201,23 @@ class Decoder(srd.Decoder):
 
             self.es_bitstring = self.samplenum
 
-            t = self.state.value[-2:] + ' TDI'
+            t = f'{self.state.value[-2:]} TDI'
             self.bits_tdi.reverse()
             self.bits_samplenums_tdi.reverse()
             b = ''.join(map(str, self.bits_tdi[1:]))
-            h = ' (0x%x' % int('0b0' + b, 2) + ')'
-            s = t + ': ' + b + h + ', ' + str(len(self.bits_tdi[1:])) + ' bits'
+            h = ' (0x%x' % int(f'0b0{b}', 2) + ')'
+            s = f'{t}: {b}{h}, {len(self.bits_tdi[1:])} bits'
             self.putx_bs([18, [s]])
             self.putp_bs([t, [b, self.bits_samplenums_tdi[1:]]])
             self.bits_tdi = []
             self.bits_samplenums_tdi = []
 
-            t = self.state.value[-2:] + ' TDO'
+            t = f'{self.state.value[-2:]} TDO'
             self.bits_tdo.reverse()
             self.bits_samplenums_tdo.reverse()
             b = ''.join(map(str, self.bits_tdo[1:]))
-            h = ' (0x%x' % int('0b0' + b, 2) + ')'
-            s = t + ': ' + b + h + ', ' + str(len(self.bits_tdo[1:])) + ' bits'
+            h = ' (0x%x' % int(f'0b0{b}', 2) + ')'
+            s = f'{t}: {b}{h}, {len(self.bits_tdo[1:])} bits'
             self.putx_bs([19, [s]])
             self.putp_bs([t, [b, self.bits_samplenums_tdo[1:]]])
             self.bits_tdo = []

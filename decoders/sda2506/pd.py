@@ -70,7 +70,7 @@ class Decoder(srd.Decoder):
         self.out_ann = self.register(srd.OUTPUT_ANN)
 
     def putbit(self, ss, es, typ, value):
-        self.put(ss, es, self.out_ann, [typ, ['%s' % (value)]])
+        self.put(ss, es, self.out_ann, [typ, [f'{value}']])
 
     def putdata(self, ss, es):
         value = 0
@@ -100,7 +100,7 @@ class Decoder(srd.Decoder):
                 self.wait({0: 'f'})
                 self.cmdbits = [(d, bitstart, self.samplenum)] + self.cmdbits
                 if len(self.cmdbits) > 24:
-                    self.cmdbits = self.cmdbits[0:24]
+                    self.cmdbits = self.cmdbits[:24]
                 self.putbit(bitstart, self.samplenum, ann_cmdbit, d)
             elif self.matched[0] and ce == 0 and clk == 0:
                 # Falling clk edge and data mode.

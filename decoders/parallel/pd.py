@@ -143,7 +143,7 @@ class Decoder(srd.Decoder):
         items = [i[2] for i in items]
         if self.options['endianness'] == 'big':
             items.reverse()
-        word = sum([d << (i * bus_width) for i, d in enumerate(items)])
+        word = sum(d << (i * bus_width) for i, d in enumerate(items))
 
         txts = [self.fmt_word.format(word)]
         self.putg(ss, es, Ann.WORD, txts)
@@ -228,8 +228,7 @@ class Decoder(srd.Decoder):
         cond_idx_data_0 = None
         cond_idx_data_N = None
         cond_idx_reset = None
-        has_clock = self.has_channel(Pin.CLOCK)
-        if has_clock:
+        if has_clock := self.has_channel(Pin.CLOCK):
             cond_idx_clock = len(conds)
             edge = {
                 'rising': 'r',
@@ -241,8 +240,7 @@ class Decoder(srd.Decoder):
             cond_idx_data_0 = len(conds)
             conds.extend([{idx: 'e'} for idx in has_data])
             cond_idx_data_N = len(conds)
-        has_reset = self.has_channel(Pin.RESET)
-        if has_reset:
+        if has_reset := self.has_channel(Pin.RESET):
             cond_idx_reset = len(conds)
             conds.append({Pin.RESET: 'e'})
             reset_active = {

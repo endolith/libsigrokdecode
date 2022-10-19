@@ -110,10 +110,10 @@ class Decoder(srd.Decoder):
         # self.putx([5, ['Register 5', 'Reg 5', 'R5']])
 
         s = '' if (self.bz == 0) else 'not '
-        self.putd(0, 0, [6, ['Z: %spressed' % s, 'BZ: %d' % self.bz]])
+        self.putd(0, 0, [6, [f'Z: {s}pressed', 'BZ: %d' % self.bz]])
 
         s = '' if (self.bc == 0) else 'not '
-        self.putd(1, 1, [7, ['C: %spressed' % s, 'BC: %d' % self.bc]])
+        self.putd(1, 1, [7, [f'C: {s}pressed', 'BC: %d' % self.bc]])
 
         self.putd(3, 2, [8, ['Accelerometer X value bits[1:0]: 0x%X' % ax_rest,
                              'AX[1:0]: 0x%X' % ax_rest]])
@@ -191,9 +191,6 @@ class Decoder(srd.Decoder):
                 self.sx = self.sy = self.ax = self.ay = self.az = -1
                 self.bz = self.bc = -1
                 self.state = 'IDLE'
-            else:
-                # self.putx([14, ['Ignoring: %s (data=%s)' % (cmd, databyte)]])
-                pass
         elif self.state == 'WRITE REGS':
             if cmd == 'DATA WRITE':
                 self.handle_reg_write(databyte)
@@ -202,6 +199,3 @@ class Decoder(srd.Decoder):
                 self.output_init_seq()
                 self.init_seq = []
                 self.state = 'IDLE'
-            else:
-                # self.putx([14, ['Ignoring: %s (data=%s)' % (cmd, databyte)]])
-                pass

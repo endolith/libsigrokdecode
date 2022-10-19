@@ -121,9 +121,12 @@ class Modbus_ADU:
                 # Sometimes happens with noise, safe to ignore.
                 return
             self.parent.puta(
-                data[self.last_byte_put].end, message_overflow,
-                self.annotation_prefix + 'error',
-                'Message too short or not finished')
+                data[self.last_byte_put].end,
+                message_overflow,
+                f'{self.annotation_prefix}error',
+                'Message too short or not finished',
+            )
+
             self.hasError = True
         if self.hasError and self.parent.options['scchannel'] != self.parent.options['cschannel']:
             # If we are decoding different channels (so client->server and
@@ -148,8 +151,7 @@ class Modbus_ADU:
         if data[-2].data == crc_byte1 and data[-1].data == crc_byte2:
             self.puti(byte_to_put, 'crc', 'CRC correct')
         else:
-            self.puti(byte_to_put, 'error',
-                'CRC should be {} {}'.format(crc_byte1, crc_byte2))
+            self.puti(byte_to_put, 'error', f'CRC should be {crc_byte1} {crc_byte2}')
 
     def half_word(self, start):
         '''Return the half word (16 bit) value starting at start bytes in. If
@@ -171,7 +173,7 @@ class Modbus_ADU:
         magic_number = 0xA001 # As defined in the modbus specification.
         for byte in self.data[:last_byte - 1]:
             result = result ^ byte.data
-            for i in range(8):
+            for _ in range(8):
                 LSB = result & 1
                 result = result >> 1
                 if (LSB): # If the LSB is true.
@@ -243,8 +245,7 @@ class Modbus_ADU:
         subfunction = self.half_word(2)
         subfunction_name = diag_subfunction.get(subfunction,
                                                 'Reserved subfunction')
-        self.puti(3, 'data',
-            'Subfunction {}: {}'.format(subfunction, subfunction_name))
+        self.puti(3, 'data', f'Subfunction {subfunction}: {subfunction_name}')
 
         diagnostic_data = self.half_word(4)
         self.puti(5, 'data',
@@ -291,8 +292,10 @@ class Modbus_ADU:
             24: 'Read FIFO Queue',
             43: 'Read Device Identification/Encapsulated Interface Transport',
         }[function]
-        self.puti(1, 'function',
-            'Function {}: {} (not supported)'.format(function, functionname))
+        self.puti(
+            1, 'function', f'Function {function}: {functionname} (not supported)'
+        )
+
 
         # From there on out we can keep marking it unsupported.
         self.putl('data', 'This function is not currently supported')
@@ -307,15 +310,15 @@ class Modbus_ADU_SC(Modbus_ADU):
         try:
             server_id = data[0].data
             if 1 <= server_id <= 247:
-                message = 'Slave ID: {}'.format(server_id)
+                message = f'Slave ID: {server_id}'
             else:
                 message = 'Slave ID {} is invalid'
             self.puti(0, 'server-id', message)
 
             function = data[1].data
-            if function == 1 or function == 2:
+            if function in [1, 2]:
                 self.parse_read_bits()
-            elif function == 3 or function == 4 or function == 23:
+            elif function in [3, 4, 23]:
                 self.parse_read_registers()
             elif function == 5:
                 self.parse_write_single_coil()
@@ -329,19 +332,18 @@ class Modbus_ADU_SC(Modbus_ADU):
                 self.parse_get_comm_event_counter()
             elif function == 12:
                 self.parse_get_comm_event_log()
-            elif function == 15 or function == 16:
+            elif function in [15, 16]:
                 self.parse_write_multiple()
             elif function == 17:
                 self.parse_report_server_id()
             elif function == 22:
                 self.parse_mask_write_register()
-            elif function in {21, 21, 24, 43}:
+            elif function in {21, 24, 43}:
                 self.parse_not_implemented()
             elif function > 0x80:
                 self.parse_error()
             else:
-                self.puti(1, 'error',
-                          'Unknown function: {}'.format(data[1].data))
+                self.puti(1, 'error', f'Unknown function: {data[1].data}')
                 self.putl('error', 'Unknown function')
 
             # If the message gets here without raising an exception, the
@@ -365,7 +367,7 @@ class Modbus_ADU_SC(Modbus_ADU):
 
         bytecount = self.data[2].data
         self.minimum_length = 5 + bytecount # 3 before data, 2 CRC.
-        self.puti(2, 'length', 'Byte count: {}'.format(bytecount))
+        self.puti(2, 'length', f'Byte count: {bytecount}')
 
         # From here on out, we expect registers on 3 and 4, 5 and 6 etc.
         # So registers never start when the length is even.
@@ -378,30 +380,26 @@ class Modbus_ADU_SC(Modbus_ADU):
         data = self.data
 
         function = data[1].data
-        if function == 3:
+        if function == 23:
+            self.puti(1, 'function', 'Function 23: Read/Write Multiple Registers')
+
+        elif function == 3:
             self.puti(1, 'function', 'Function 3: Read Holding Registers')
         elif function == 4:
             self.puti(1, 'function', 'Function 4: Read Input Registers')
-        elif function == 23:
-            self.puti(1, 'function', 'Function 23: Read/Write Multiple Registers')
-
         bytecount = self.data[2].data
         self.minimum_length = 5 + bytecount # 3 before data, 2 CRC.
         if bytecount % 2 == 0:
-            self.puti(2, 'length', 'Byte count: {}'.format(bytecount))
+            self.puti(2, 'length', f'Byte count: {bytecount}')
         else:
-            self.puti(2, 'error',
-                'Error: Odd byte count ({})'.format(bytecount))
+            self.puti(2, 'error', f'Error: Odd byte count ({bytecount})')
 
-        # From here on out, we expect registers on 3 and 4, 5 and 6 etc.
-        # So registers never start when the length is even.
-        if len(data) % 2 == 1:
-            register_value = self.half_word(-2)
-            self.putl('data', '0x{0:04X} / {0}'.format(register_value),
-                      bytecount + 2)
-        else:
+        if len(data) % 2 != 1:
             raise No_more_data
 
+        register_value = self.half_word(-2)
+        self.putl('data', '0x{0:04X} / {0}'.format(register_value),
+                  bytecount + 2)
         self.check_crc(bytecount + 4)
 
     def parse_read_exception_status(self):
@@ -427,7 +425,7 @@ class Modbus_ADU_SC(Modbus_ADU):
             self.puti(3, 'error', 'Bad status: 0x{:04X}'.format(status))
 
         count = self.half_word(4)
-        self.puti(5, 'data', 'Event Count: {}'.format(count))
+        self.puti(5, 'data', f'Event Count: {count}')
         self.check_crc(7)
 
     def parse_get_comm_event_log(self):
@@ -437,7 +435,7 @@ class Modbus_ADU_SC(Modbus_ADU):
         data = self.data
 
         bytecount = data[2].data
-        self.puti(2, 'length', 'Bytecount: {}'.format(bytecount))
+        self.puti(2, 'length', f'Bytecount: {bytecount}')
         # The bytecount is the length of everything except the slaveID,
         # function code, bytecount and CRC.
         self.mimumum_length = 5 + bytecount
@@ -451,10 +449,10 @@ class Modbus_ADU_SC(Modbus_ADU):
             self.puti(4, 'error', 'Bad status: 0x{:04X}'.format(status))
 
         event_count = self.half_word(5)
-        self.puti(6, 'data', 'Event Count: {}'.format(event_count))
+        self.puti(6, 'data', f'Event Count: {event_count}')
 
         message_count = self.half_word(7)
-        self.puti(8, 'data', 'Message Count: {}'.format(message_count))
+        self.puti(8, 'data', f'Message Count: {message_count}')
 
         self.putl('data', 'Event: 0x{:02X}'.format(data[-1].data),
                   bytecount + 2)
@@ -476,8 +474,7 @@ class Modbus_ADU_SC(Modbus_ADU):
             max_outputs = 0x007B
             long_address_offset = 30001
 
-        self.puti(1, 'function',
-            'Function {}: Write Multiple {}'.format(function, data_unit))
+        self.puti(1, 'function', f'Function {function}: Write Multiple {data_unit}')
 
         starting_address = self.half_word(2)
         # Some instruction manuals use a long form name for addresses, this is
@@ -489,12 +486,14 @@ class Modbus_ADU_SC(Modbus_ADU):
 
         quantity_of_outputs = self.half_word(4)
         if quantity_of_outputs <= max_outputs:
-            self.puti(5, 'data',
-                'Write {} {}'.format(quantity_of_outputs, data_unit))
+            self.puti(5, 'data', f'Write {quantity_of_outputs} {data_unit}')
         else:
-            self.puti(5, 'error',
-                'Bad value: {} {}. Max is {}'.format(quantity_of_outputs,
-                                                     data_unit, max_outputs))
+            self.puti(
+                5,
+                'error',
+                f'Bad value: {quantity_of_outputs} {data_unit}. Max is {max_outputs}',
+            )
+
 
         self.check_crc(7)
 
@@ -512,9 +511,9 @@ class Modbus_ADU_SC(Modbus_ADU):
         self.puti(1, 'function', 'Function 17: Report Server ID')
 
         bytecount = data[2].data
-        self.puti(2, 'length', 'Data is {} bytes long'.format(bytecount))
+        self.puti(2, 'length', f'Data is {bytecount} bytes long')
 
-        self.puti(3, 'data', 'serverID: {}'.format(data[3].data))
+        self.puti(3, 'data', f'serverID: {data[3].data}')
 
         run_indicator_status = data[4].data
         if run_indicator_status == 0x00:
@@ -525,8 +524,12 @@ class Modbus_ADU_SC(Modbus_ADU):
             self.puti(4, 'error',
                 'Bad Run Indicator status: 0x{:X}'.format(run_indicator_status))
 
-        self.putl('data', 'Device specific data: {}, "{}"'.format(data[-1].data,
-                  chr(data[-1].data)), 2 + bytecount)
+        self.putl(
+            'data',
+            f'Device specific data: {data[-1].data}, "{chr(data[-1].data)}"',
+            2 + bytecount,
+        )
+
 
         self.check_crc(4 + bytecount)
 
@@ -558,10 +561,11 @@ class Modbus_ADU_SC(Modbus_ADU):
             24: 'Read FIFO Queue',
             43: 'Read Device Identification/Encapsulated Interface Transport',
         }
-        functionname = '{}: {}'.format(functioncode,
-            functions.get(functioncode, 'Unknown function'))
-        self.puti(1, 'function',
-                  'Error for function {}'.format(functionname))
+        functionname = (
+            f"{functioncode}: {functions.get(functioncode, 'Unknown function')}"
+        )
+
+        self.puti(1, 'function', f'Error for function {functionname}')
 
         error = self.data[2].data
         errorcodes = {
@@ -575,8 +579,8 @@ class Modbus_ADU_SC(Modbus_ADU):
             10: 'Gateway Path Unavailable',
             11: 'Gateway Target Device failed to respond',
         }
-        errorname = '{}: {}'.format(error, errorcodes.get(error, 'Unknown'))
-        self.puti(2, 'data', 'Error {}'.format(errorname))
+        errorname = f"{error}: {errorcodes.get(error, 'Unknown')}"
+        self.puti(2, 'data', f'Error {errorname}')
         self.check_crc(4)
 
 class Modbus_ADU_CS(Modbus_ADU):
@@ -592,9 +596,9 @@ class Modbus_ADU_CS(Modbus_ADU):
             if server_id == 0:
                 message = 'Broadcast message'
             elif 1 <= server_id <= 247:
-                message = 'Slave ID: {}'.format(server_id)
+                message = f'Slave ID: {server_id}'
             elif 248 <= server_id <= 255:
-                message = 'Slave ID: {} (reserved address)'.format(server_id)
+                message = f'Slave ID: {server_id} (reserved address)'
             self.puti(0, 'server-id', message)
 
             function = data[1].data
@@ -602,7 +606,7 @@ class Modbus_ADU_CS(Modbus_ADU):
                 self.parse_read_data_command()
             if function == 5:
                 self.parse_write_single_coil()
-            if function == 6:
+            elif function == 6:
                 self.parse_write_single_register()
             if function in {7, 11, 12, 17}:
                 self.parse_single_byte_request()
@@ -614,11 +618,10 @@ class Modbus_ADU_CS(Modbus_ADU):
                 self.parse_mask_write_register()
             elif function == 23:
                 self.parse_read_write_registers()
-            elif function in {21, 21, 24, 43}:
+            elif function in {21, 24, 43}:
                 self.parse_not_implemented()
             else:
-                self.puti(1, 'error',
-                          'Unknown function: {}'.format(data[1].data))
+                self.puti(1, 'error', f'Unknown function: {data[1].data}')
                 self.putl('error', 'Unknown function')
 
             # If the message gets here without raising an exception, the
@@ -642,8 +645,7 @@ class Modbus_ADU_CS(Modbus_ADU):
                         4: 'Read Input Registers',
                         }[function]
 
-        self.puti(1, 'function',
-                  'Function {}: {}'.format(function, functionname))
+        self.puti(1, 'function', f'Function {function}: {functionname}')
 
         starting_address = self.half_word(2)
         # Some instruction manuals use a long form name for addresses, this is
@@ -666,8 +668,7 @@ class Modbus_ADU_CS(Modbus_ADU):
                          12: 'Get Comm Event Log',
                          17: 'Report Slave ID',
                          }[function]
-        self.puti(1, 'function',
-                  'Function {}: {}'.format(function, function_name))
+        self.puti(1, 'function', f'Function {function}: {function_name}')
 
         self.check_crc(3)
 
@@ -688,8 +689,7 @@ class Modbus_ADU_CS(Modbus_ADU):
             ratio_bytes_data = 2
             long_address_offset = 30001
 
-        self.puti(1, 'function',
-            'Function {}: Write Multiple {}'.format(function, data_unit))
+        self.puti(1, 'function', f'Function {function}: Write Multiple {data_unit}')
 
         starting_address = self.half_word(2)
         # Some instruction manuals use a long form name for addresses, this is
@@ -701,21 +701,26 @@ class Modbus_ADU_CS(Modbus_ADU):
 
         quantity_of_outputs = self.half_word(4)
         if quantity_of_outputs <= max_outputs:
-            self.puti(5, 'length',
-                'Write {} {}'.format(quantity_of_outputs, data_unit))
+            self.puti(5, 'length', f'Write {quantity_of_outputs} {data_unit}')
         else:
-            self.puti(5, 'error',
-                'Bad value: {} {}. Max is {}'.format(quantity_of_outputs,
-                                                     data_unit, max_outputs))
+            self.puti(
+                5,
+                'error',
+                f'Bad value: {quantity_of_outputs} {data_unit}. Max is {max_outputs}',
+            )
+
         proper_bytecount = ceil(quantity_of_outputs * ratio_bytes_data)
 
         bytecount = self.data[6].data
         if bytecount == proper_bytecount:
-            self.puti(6, 'length', 'Byte count: {}'.format(bytecount))
+            self.puti(6, 'length', f'Byte count: {bytecount}')
         else:
-            self.puti(6, 'error',
-                'Bad byte count, is {}, should be {}'.format(bytecount,
-                                                             proper_bytecount))
+            self.puti(
+                6,
+                'error',
+                f'Bad byte count, is {bytecount}, should be {proper_bytecount}',
+            )
+
         self.mimumum_length = bytecount + 9
 
         self.putl('data', 'Value 0x{:X}', 6 + bytecount)
@@ -733,11 +738,14 @@ class Modbus_ADU_CS(Modbus_ADU):
         # 1 for serverID, 1 for function, 1 for bytecount, 2 for CRC.
 
         if 0x07 <= bytecount <= 0xF5:
-            self.puti(2, 'length', 'Request is {} bytes long'.format(bytecount))
+            self.puti(2, 'length', f'Request is {bytecount} bytes long')
         else:
-            self.puti(2, 'error',
-                'Request claims to be {} bytes long, legal values are between'
-                ' 7 and 247'.format(bytecount))
+            self.puti(
+                2,
+                'error',
+                f'Request claims to be {bytecount} bytes long, legal values are between 7 and 247',
+            )
+
 
         current_byte = len(data) - 1
         # Function 20 is a number of sub-requests, the first starting at 3,
@@ -754,21 +762,18 @@ class Modbus_ADU_CS(Modbus_ADU):
                 raise No_more_data
             elif step == 2:
                 file_number = self.half_word(current_byte - 1)
-                self.puti(current_byte, 'data',
-                          'Read File number {}'.format(file_number))
+                self.puti(current_byte, 'data', f'Read File number {file_number}')
             elif step == 3:
                 raise No_more_data
             elif step == 4:
                 record_number = self.half_word(current_byte - 1)
-                self.puti(current_byte, 'address',
-                    'Read from record number {}'.format(record_number))
-                # TODO: Check if within range.
+                self.puti(current_byte, 'address', f'Read from record number {record_number}')
+                        # TODO: Check if within range.
             elif step == 5:
                 raise No_more_data
             elif step == 6:
                 records_to_read = self.half_word(current_byte - 1)
-                self.puti(current_byte, 'length',
-                    'Read {} records'.format(records_to_read))
+                self.puti(current_byte, 'length', f'Read {records_to_read} records')
         self.check_crc(4 + bytecount)
 
     def parse_read_write_registers(self):
@@ -794,17 +799,19 @@ class Modbus_ADU_CS(Modbus_ADU):
                                                              address_name))
 
         quantity_of_outputs = self.half_word(8)
-        self.puti(9, 'length',
-                           'Write {} registers'.format(quantity_of_outputs))
+        self.puti(9, 'length', f'Write {quantity_of_outputs} registers')
         proper_bytecount = quantity_of_outputs * 2
 
         bytecount = self.data[10].data
         if bytecount == proper_bytecount:
-            self.puti(10, 'length', 'Byte count: {}'.format(bytecount))
+            self.puti(10, 'length', f'Byte count: {bytecount}')
         else:
-            self.puti(10, 'error',
-                'Bad byte count, is {}, should be {}'.format(bytecount,
-                                                             proper_bytecount))
+            self.puti(
+                10,
+                'error',
+                f'Bad byte count, is {bytecount}, should be {proper_bytecount}',
+            )
+
         self.mimumum_length = bytecount + 13
 
         self.putl('data', 'Data, value 0x{:02X}', 10 + bytecount)
@@ -884,11 +891,8 @@ class Decoder(srd.Decoder):
                    client) being decoded right now?'''
         ptype, rxtx, pdata = data
 
-        # We don't have a nice way to get the baud rate from UART, so we have
-        # to figure out how long a bit lasts. We do this by looking at the
-        # length of (probably) the startbit.
         if self.bitlength is None:
-            if ptype == 'STARTBIT' or ptype == 'STOPBIT':
+            if ptype in ['STARTBIT', 'STOPBIT']:
                 self.bitlength = es - ss
             else:
                 # If we don't know the bitlength yet, we can't start decoding.

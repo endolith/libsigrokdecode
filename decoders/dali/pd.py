@@ -84,10 +84,7 @@ class Decoder(srd.Decoder):
         a, c, f, g, b = 0, 0, 0, 0, self.bits
         # Individual raw bits.
         for i in range(length):
-            if i == 0:
-                ss = max(0, self.bits[0][0])
-            else:
-                ss = self.ss_es_bits[i - 1][1]
+            ss = max(0, self.bits[0][0]) if i == 0 else self.ss_es_bits[i - 1][1]
             es = self.bits[i][0] + (self.halfbit * 2)
             self.ss_es_bits.append([ss, es])
             self.putb(i, i, [0, ['%d' % self.bits[i][1]]])
@@ -232,7 +229,7 @@ class Decoder(srd.Decoder):
                 self.state = 'PHASE1'
             elif self.state == 'PHASE1':
                 if (bit == 1) and (self.phase0 == 1): # Stop bit.
-                    if len(self.bits) == 17 or len(self.bits) == 9:
+                    if len(self.bits) in {17, 9}:
                         # Forward or Backward.
                         self.handle_bits(len(self.bits))
                     self.reset_decoder_state() # Reset upon errors.

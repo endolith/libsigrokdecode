@@ -86,15 +86,15 @@ class Decoder(srd.Decoder):
     def newaddr(self, addr, data):
         # Falling edge on ALE: reconstruct address.
         self.started = 1
-        addr = sum([bit << i for i, bit in enumerate(addr)])
+        addr = sum(bit << i for i, bit in enumerate(addr))
         addr <<= len(data)
-        addr |= sum([bit << i for i, bit in enumerate(data)])
+        addr |= sum(bit << i for i, bit in enumerate(data))
         self.addr = addr
         self.addr_s = self.samplenum
 
     def newdata(self, data):
         # Edge on PSEN: get data.
-        data = sum([bit << i for i, bit in enumerate(data)])
+        data = sum(bit << i for i, bit in enumerate(data))
         self.data = data
         self.data_s = self.samplenum
         if self.started:

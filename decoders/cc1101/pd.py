@@ -124,11 +124,10 @@ class Decoder(srd.Decoder):
         '''Returns the label for the current command.'''
         if self.cmd in ('Read', 'Burst read', 'Write', 'Burst write', 'Status read'):
             return self.cmd
-        if self.cmd == 'Strobe':
-            reg = strobes.get(self.dat, 'unknown strobe')
-            return '{} {}'.format(self.cmd, reg)
-        else:
-            return 'TODO Cmd {}'.format(self.cmd)
+        if self.cmd != 'Strobe':
+            return f'TODO Cmd {self.cmd}'
+        reg = strobes.get(self.dat, 'unknown strobe')
+        return f'{self.cmd} {reg}'
 
     def parse_command(self, b):
         '''Parses the command byte.
@@ -184,9 +183,9 @@ class Decoder(srd.Decoder):
             self.decode_status_reg(pos, ann, data, label)
         else:
             if self.cmd in ('Write', 'Read', 'Status read', 'Burst read', 'Burst write'):
-                label = '{}: {}'.format(self.format_command(), name)
+                label = f'{self.format_command()}: {name}'
             else:
-                label = 'Reg ({}) {}'.format(self.cmd, name)
+                label = f'Reg ({self.cmd}) {name}'
             self.decode_mb_data(pos, ann, data, label)
 
     def decode_status_reg(self, pos, ann, data, label):
@@ -194,19 +193,19 @@ class Decoder(srd.Decoder):
         'pos'. The decoded data is prefixed with 'label'.'''
         status = data[0]
         # bit 7 --> CHIP_RDYn
-        if status & 0b10000000 == 0b10000000:
-            longtext_chiprdy = 'CHIP_RDYn is high! '
-        else:
-            longtext_chiprdy = ''
+        longtext_chiprdy = (
+            'CHIP_RDYn is high! ' if status & 0b10000000 == 0b10000000 else ''
+        )
+
         # bits 6:4 --> STATE
         state = (status & 0x70) >> 4
-        longtext_state = 'STATE is {}, '.format(status_reg_states[state])
+        longtext_state = f'STATE is {status_reg_states[state]}, '
         # bits 3:0 --> FIFO_BYTES_AVAILABLE
         fifo_bytes = status & 0x0F
         if self.cmd in ('Single read', 'Status read', 'Burst read'):
-            longtext_fifo = '{} bytes available in RX FIFO'.format(fifo_bytes)
+            longtext_fifo = f'{fifo_bytes} bytes available in RX FIFO'
         else:
-            longtext_fifo = '{} bytes free in TX FIFO'.format(fifo_bytes)
+            longtext_fifo = f'{fifo_bytes} bytes free in TX FIFO'
 
         text = '{} = {:02X}'.format(label, status)
         longtext = ''.join([text, '; ', longtext_chiprdy, longtext_state, longtext_fifo])
@@ -283,12 +282,11 @@ class Decoder(srd.Decoder):
                 self.decode_command(pos, mosi)
                 # First MISO byte is always the status register.
                 self.decode_reg(pos, Ann.STATUS, 'STATUS', [miso])
+            elif not self.cmd or len(self.mb) >= self.max:
+                self.warn(pos, 'excess byte')
             else:
-                if not self.cmd or len(self.mb) >= self.max:
-                    self.warn(pos, 'excess byte')
-                else:
-                    # Collect the bytes after the command byte.
-                    if self.ss_mb == -1:
-                        self.ss_mb = ss
-                    self.es_mb = es
-                    self.mb.append(Data(mosi, miso))
+                # Collect the bytes after the command byte.
+                if self.ss_mb == -1:
+                    self.ss_mb = ss
+                self.es_mb = es
+                self.mb.append(Data(mosi, miso))

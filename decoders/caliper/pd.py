@@ -94,11 +94,17 @@ class Decoder(srd.Decoder):
             if timeout_ms and not self.matched[0]:
                 if self.number_bits or self.flags_bits:
                     count = len(self.number_bits) + len(self.flags_bits)
-                    self.putg(self.ss, self.samplenum, 1, [
-                        'timeout with {} bits in buffer'.format(count),
-                        'timeout ({} bits)'.format(count),
-                        'timeout',
-                    ])
+                    self.putg(
+                        self.ss,
+                        self.samplenum,
+                        1,
+                        [
+                            f'timeout with {count} bits in buffer',
+                            f'timeout ({count} bits)',
+                            'timeout',
+                        ],
+                    )
+
                 self.reset()
                 continue
 
@@ -112,8 +118,8 @@ class Decoder(srd.Decoder):
                 continue
             if len(self.flags_bits) < 8:
                 self.flags_bits.append(data)
-                if len(self.flags_bits) < 8:
-                    continue
+            if len(self.flags_bits) < 8:
+                continue
 
             # Get raw values from received data bits. Run the number
             # conversion, controlled by flags and/or user specs.

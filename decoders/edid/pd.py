@@ -127,7 +127,7 @@ class Decoder(srd.Decoder):
             if self.extension > 0:
                 self.state = St.EXTENSIONS
                 s = str(self.extension)
-                t = ["Extension: " + s, "X: " + s, s]
+                t = [f"Extension: {s}", f"X: {s}", s]
             else:
                 self.state = St.HEADER
                 t = ["EDID"]
@@ -142,15 +142,15 @@ class Decoder(srd.Decoder):
                 ext = self.extension - 1
                 l = len(self.ext_sn[ext])
                 # Truncate or extend to self.cnt.
-                self.sn = self.ext_sn[ext][0:self.cnt] + [0] * max(0, self.cnt - l)
-                self.cache = self.ext_cache[ext][0:self.cnt] + [0] * max(0, self.cnt - l)
+                self.sn = self.ext_sn[ext][:self.cnt] + [0] * max(0, self.cnt - l)
+                self.cache = self.ext_cache[ext][:self.cnt] + [0] * max(0, self.cnt - l)
             else:
                 l = len(self.sn)
-                self.sn = self.sn[0:self.cnt] + [0] * max(0, self.cnt - l)
-                self.cache = self.cache[0:self.cnt] + [0] * max(0, self.cnt - l)
-            ss = self.ss if self.ss else ss
+                self.sn = self.sn[:self.cnt] + [0] * max(0, self.cnt - l)
+                self.cache = self.cache[:self.cnt] + [0] * max(0, self.cnt - l)
+            ss = self.ss or ss
             s = str(data)
-            t = ["Offset: " + s, "O: " + s, s]
+            t = [f"Offset: {s}", f"O: {s}", s]
             self.put(ss, es, self.out_ann, [ANN_SECTIONS, t])
             return
 
@@ -168,17 +168,16 @@ class Decoder(srd.Decoder):
 
         if self.state is None or self.state == St.HEADER:
             # Wait for the EDID header
-            if self.cnt >= OFF_VENDOR:
-                if self.cache[-8:] == EDID_HEADER:
-                    # Throw away any garbage before the header
-                    self.sn = self.sn[-8:]
-                    self.cache = self.cache[-8:]
-                    self.cnt = 8
-                    self.state = St.EDID
-                    self.put(self.sn[0][0], es, self.out_ann,
-                            [ANN_SECTIONS, ['Header']])
-                    self.put(self.sn[0][0], es, self.out_ann,
-                            [ANN_FIELDS, ['Header pattern']])
+            if self.cnt >= OFF_VENDOR and self.cache[-8:] == EDID_HEADER:
+                # Throw away any garbage before the header
+                self.sn = self.sn[-8:]
+                self.cache = self.cache[-8:]
+                self.cnt = 8
+                self.state = St.EDID
+                self.put(self.sn[0][0], es, self.out_ann,
+                        [ANN_SECTIONS, ['Header']])
+                self.put(self.sn[0][0], es, self.out_ann,
+                        [ANN_FIELDS, ['Header pattern']])
         elif self.state == St.EDID:
             if self.cnt == OFF_VERSION:
                 self.decode_vid(-10)
@@ -218,13 +217,8 @@ class Decoder(srd.Decoder):
                 self.put(ss, es, self.out_ann,
                     [0, ['Extensions present: %d' % self.cache[self.cnt-1]]])
             elif self.cnt == OFF_CHECKSUM+1:
-                checksum = 0
-                for i in range(128):
-                    checksum += self.cache[i]
-                if checksum % 256 == 0:
-                    csstr = 'OK'
-                else:
-                    csstr = 'WRONG!'
+                checksum = sum(self.cache[i] for i in range(128))
+                csstr = 'OK' if checksum % 256 == 0 else 'WRONG!'
                 self.put(ss, es, self.out_ann, [0, ['Checksum: %d (%s)' % (
                          self.cache[self.cnt-1], csstr)]])
                 self.state = St.EXTENSIONS
@@ -278,19 +272,23 @@ class Decoder(srd.Decoder):
     def lookup_pnpid(self, pnpid):
         pnpid_file = os.path.join(os.path.dirname(__file__), 'pnpids.txt')
         if os.path.exists(pnpid_file):
-            for line in open(pnpid_file).readlines():
-                if line.find(pnpid + ';') == 0:
+            for line in open(pnpid_file):
+                if line.find(f'{pnpid};') == 0:
                     return line[4:].strip()
         return ''
 
     def decode_vid(self, offset):
-        pnpid = chr(64 + ((self.cache[offset] & 0x7c) >> 2))
-        pnpid += chr(64 + (((self.cache[offset] & 0x03) << 3)
-                           | ((self.cache[offset+1] & 0xe0) >> 5)))
+        pnpid = chr(64 + ((self.cache[offset] & 0x7C) >> 2)) + chr(
+            64
+            + (
+                ((self.cache[offset] & 0x03) << 3)
+                | ((self.cache[offset + 1] & 0xE0) >> 5)
+            )
+        )
+
         pnpid += chr(64 + (self.cache[offset+1] & 0x1f))
-        vendor = self.lookup_pnpid(pnpid)
-        if vendor:
-            pnpid += ' (%s)' % vendor
+        if vendor := self.lookup_pnpid(pnpid):
+            pnpid += f' ({vendor})'
         self.ann_field(offset, offset+1, pnpid)
 
     def decode_pid(self, offset):
@@ -299,9 +297,9 @@ class Decoder(srd.Decoder):
 
     def decode_serial(self, offset):
         serialnum = (self.cache[offset+3] << 24) \
-                + (self.cache[offset+2] << 16) \
-                + (self.cache[offset+1] << 8) \
-                + self.cache[offset]
+                    + (self.cache[offset+2] << 16) \
+                    + (self.cache[offset+1] << 8) \
+                    + self.cache[offset]
         serialstr = ''
         is_alnum = True
         for i in range(4):
@@ -310,7 +308,7 @@ class Decoder(srd.Decoder):
                 break
             serialstr += chr(self.cache[offset+3-i])
         serial = serialstr if is_alnum else str(serialnum)
-        self.ann_field(offset, offset+3, 'Serial ' + serial)
+        self.ann_field(offset, offset+3, f'Serial {serial}')
 
     def decode_mfrdate(self, offset):
         datestr = ''
@@ -318,7 +316,7 @@ class Decoder(srd.Decoder):
             datestr += 'week %d, ' % self.cache[offset]
         datestr += str(1990 + self.cache[offset+1])
         if datestr:
-            self.ann_field(offset, offset+1, ['Manufactured ' + datestr, datestr])
+            self.ann_field(offset, offset+1, [f'Manufactured {datestr}', datestr])
 
     def decode_basicdisplay(self, offset):
         # Video input definition
@@ -342,12 +340,12 @@ class Decoder(srd.Decoder):
             if vid & 0x01:
                 syncs += 'Vsync serration required, '
             if syncs:
-                self.ann_field(offset, offset, 'Supported syncs: %s' % syncs[:-2])
+                self.ann_field(offset, offset, f'Supported syncs: {syncs[:-2]}')
         # Max horizontal/vertical image size
         if self.cache[offset+1] != 0 and self.cache[offset+2] != 0:
             # Projectors have this set to 0
             sizestr = '%dx%dcm' % (self.cache[offset+1], self.cache[offset+2])
-            self.ann_field(offset+1, offset+2, 'Physical size: ' + sizestr)
+            self.ann_field(offset+1, offset+2, f'Physical size: {sizestr}')
         # Display transfer characteristic (gamma)
         if self.cache[offset+3] != 0xff:
             gamma = (self.cache[offset+3] + 100) / 100
@@ -362,7 +360,7 @@ class Decoder(srd.Decoder):
         if fs & 0x20:
             dpms += 'active off, '
         if dpms:
-            self.ann_field(offset+4, offset+4, 'DPMS support: %s' % dpms[:-2])
+            self.ann_field(offset+4, offset+4, f'DPMS support: {dpms[:-2]}')
         dt = (fs & 0x18) >> 3
         dtstr = ''
         if dt == 0:
@@ -372,17 +370,15 @@ class Decoder(srd.Decoder):
         elif dt == 2:
             dtstr = 'non-RGB multicolor'
         if dtstr:
-            self.ann_field(offset+4, offset+4, 'Display type: %s' % dtstr)
+            self.ann_field(offset+4, offset+4, f'Display type: {dtstr}')
         if fs & 0x04:
             self.ann_field(offset+4, offset+4, 'Color space: standard sRGB')
         # Save this for when we decode the first detailed timing descriptor
         self.have_preferred_timing = (fs & 0x02) == 0x02
-        if fs & 0x01:
-            gft = ''
-        else:
-            gft = 'not '
-        self.ann_field(offset+4, offset+4,
-                       'Generalized timing formula: %ssupported' % gft)
+        gft = '' if fs & 0x01 else 'not '
+        self.ann_field(
+            offset + 4, offset + 4, f'Generalized timing formula: {gft}supported'
+        )
 
     def convert_color(self, value):
         # Convert from 10-bit packet format to float
@@ -417,15 +413,14 @@ class Decoder(srd.Decoder):
     def decode_est_timing(self, offset):
         # Pre-EDID modes
         bitmap = (self.cache[offset] << 9) \
-            + (self.cache[offset+1] << 1) \
-            + ((self.cache[offset+2] & 0x80) >> 7)
-        modestr = ''
-        for i in range(17):
-                if bitmap & (1 << (16-i)):
-                    modestr += est_modes[i] + ', '
-        if modestr:
-            self.ann_field(offset, offset+2,
-                           'Supported established modes: %s' % modestr[:-2])
+                + (self.cache[offset+1] << 1) \
+                + ((self.cache[offset+2] & 0x80) >> 7)
+        if modestr := ''.join(
+            f'{est_modes[i]}, ' for i in range(17) if bitmap & (1 << (16 - i))
+        ):
+            self.ann_field(
+                offset, offset + 2, f'Supported established modes: {modestr[:-2]}'
+            )
 
     def decode_std_timing(self, offset):
         modestr = ''
@@ -440,16 +435,14 @@ class Decoder(srd.Decoder):
             refresh = (self.cache[offset+i+1] & 0x3f) + 60
             modestr += '%dx%d@%dHz, ' % (x, y, refresh)
         if modestr:
-            self.ann_field(offset, offset + 15,
-                    'Supported standard modes: %s' % modestr[:-2])
+            self.ann_field(
+                offset, offset + 15, f'Supported standard modes: {modestr[:-2]}'
+            )
 
     def decode_detailed_timing(self, cache, sn, offset, is_first):
-        if is_first and self.have_preferred_timing:
-            # Only on first detailed timing descriptor
-            section = 'Preferred'
-        else:
-            section = 'Detailed'
-        section += ' timing descriptor'
+        section = (
+            'Preferred' if is_first and self.have_preferred_timing else 'Detailed'
+        ) + ' timing descriptor'
 
         self.put(sn[0][0], sn[17][1],
              self.out_ann, [ANN_SECTIONS, [section]])
@@ -487,19 +480,17 @@ class Decoder(srd.Decoder):
         features = 'Flags: '
         if cache[17] & 0x80:
             features += 'interlaced, '
-        stereo = (cache[17] & 0x60) >> 5
-        if stereo:
+        if stereo := (cache[17] & 0x60) >> 5:
             if cache[17] & 0x01:
                 features += '2-way interleaved stereo ('
                 features += ['right image on even lines',
                              'left image on even lines',
                              'side-by-side'][stereo-1]
-                features += '), '
             else:
                 features += 'field sequential stereo ('
                 features += ['right image on sync=1', 'left image on sync=1',
                              '4-way interleaved'][stereo-1]
-                features += '), '
+            features += '), '
         sync = (cache[17] & 0x18) >> 3
         sync2 = (cache[17] & 0x06) >> 1
         posneg = ['negative', 'positive']
@@ -509,12 +500,12 @@ class Decoder(srd.Decoder):
         elif sync == 0x01:
             features += 'bipolar analog composite (serrate on RGB)'
         elif sync == 0x02:
-            features += 'digital composite (serrate on composite polarity ' \
-                        + (posneg[sync2 & 0x01]) + ')'
+            features += f'digital composite (serrate on composite polarity {posneg[sync2 & 1]})'
+
         elif sync == 0x03:
             features += 'digital separate ('
-            features += 'Vsync polarity ' + (posneg[(sync2 & 0x02) >> 1])
-            features += ', Hsync polarity ' + (posneg[sync2 & 0x01])
+            features += f'Vsync polarity {posneg[(sync2 & 2) >> 1]}'
+            features += f', Hsync polarity {posneg[sync2 & 1]}'
             features += ')'
         features += ', '
         self.ann_field(offset+17, offset+17, features[:-2])
@@ -591,9 +582,8 @@ class Decoder(srd.Decoder):
         for i in range(offset, 0, 18):
             if cache[i] != 0 or cache[i+1] != 0:
                 self.decode_detailed_timing(cache[i:], sn[i:], i, i == offset)
-            else:
-                if cache[i+2] == 0 or cache[i+4] == 0:
-                    self.decode_descriptor(cache[i:], i)
+            elif cache[i+2] == 0 or cache[i+4] == 0:
+                self.decode_descriptor(cache[i:], i)
 
     def decode_data_block(self, tag, cache, sn):
         codes = { 0: ['0: Reserved'],

@@ -28,8 +28,7 @@ exc_names = [
     'SysTick', 'Reserved', 'Reset', 'BusFault', 'Reserved', 'Reserved'
 ]
 
-for i in range(8, 496):
-    exc_names.append('IRQ%d' % i)
+exc_names.extend('IRQ%d' % i for i in range(8, 496))
 
 def parse_varint(bytes_):
     '''Parse an integer where the top bit is the continuation bit.
@@ -118,7 +117,7 @@ def parse_branch_addr(bytes_, ref_addr, cpu_state, branch_enc):
         addr = (addr & 0xFFFFFFFFE) >> 1
         addr_bits -= 1
     else:
-        raise NotImplementedError('Unhandled state: ' + cpu_state)
+        raise NotImplementedError(f'Unhandled state: {cpu_state}')
 
     # If the address wasn't full, fill in with the previous address.
     if addrlen < 5:
@@ -198,7 +197,7 @@ class Decoder(srd.Decoder):
         disasm_lookup: Find the instruction text from current PC.
         source_lookup: Find the source code line from current PC.
         '''
-        if not (self.options['objdump'] and self.options['elffile']):
+        if not self.options['objdump'] or not self.options['elffile']:
             return
 
         opts = [self.options['objdump']]
@@ -222,11 +221,10 @@ class Decoder(srd.Decoder):
         prev_func = ''
 
         for line in disasm.split('\n'):
-            m = instpat.match(line)
-            if m:
-                addr = int(m.group(1), 16)
-                raw = m.group(2)
-                disas = m.group(3).strip().replace('\t', ' ')
+            if m := instpat.match(line):
+                addr = int(m[1], 16)
+                raw = m[2]
+                disas = m[3].strip().replace('\t', ' ')
                 self.disasm_lookup[addr] = disas
                 self.source_lookup[addr] = prev_src
                 self.file_lookup[addr] = prev_file
@@ -236,26 +234,16 @@ class Decoder(srd.Decoder):
                 ilen = len(raw.replace(' ', '')) // 2
                 next_n = addr + ilen
 
-                # Next address if branch is taken.
-                bm = branchpat.match(disas)
-                if bm:
-                    next_e = int(bm.group(2), 16)
-                else:
-                    next_e = next_n
-
+                next_e = int(bm.group(2), 16) if (bm := branchpat.match(disas)) else next_n
                 self.next_instr_lookup[addr] = (next_n, next_e)
+            elif m := funcpat.match(line):
+                prev_func = m[1]
+                prev_src = None
+            elif m := filepat.match(line):
+                prev_file = m[1]
+                prev_src = None
             else:
-                m = funcpat.match(line)
-                if m:
-                    prev_func = m.group(1)
-                    prev_src = None
-                else:
-                    m = filepat.match(line)
-                    if m:
-                        prev_file = m.group(1)
-                        prev_src = None
-                    else:
-                        prev_src = line.strip()
+                prev_src = line.strip()
 
     def flush_current_loc(self):
         if self.current_loc is not None:
@@ -300,9 +288,10 @@ class Decoder(srd.Decoder):
             new_func = self.func_lookup.get(pc)
 
             # Report source line only when it changes.
-            if self.current_loc is not None:
-                if new_loc != self.current_loc[2] or new_src != self.current_loc[3]:
-                    self.flush_current_loc()
+            if self.current_loc is not None and (
+                new_loc != self.current_loc[2] or new_src != self.current_loc[3]
+            ):
+                self.flush_current_loc()
 
             if self.current_loc is None:
                 self.current_loc = [ss, es, new_loc, new_src]
@@ -310,9 +299,8 @@ class Decoder(srd.Decoder):
                 self.current_loc[1] = es
 
             # Report function name only when it changes.
-            if self.current_func is not None:
-                if new_func != self.current_func[2]:
-                    self.flush_current_func()
+            if self.current_func is not None and new_func != self.current_func[2]:
+                self.flush_current_func()
 
             if self.current_func is None:
                 self.current_func = [ss, es, new_func]
@@ -322,15 +310,12 @@ class Decoder(srd.Decoder):
             # Report instruction every time.
             if new_dis:
                 if exec_status:
-                    a = [6, ['Executed: ' + new_dis, new_dis, new_dis.split()[0]]]
+                    a = [6, [f'Executed: {new_dis}', new_dis, new_dis.split()[0]]]
                 else:
-                    a = [7, ['Not executed: ' + new_dis, new_dis, new_dis.split()[0]]]
+                    a = [7, [f'Not executed: {new_dis}', new_dis, new_dis.split()[0]]]
                 self.put(ss, es, self.out_ann, a)
 
-            if exec_status:
-                self.current_pc = target_e
-            else:
-                self.current_pc = target_n
+            self.current_pc = target_e if exec_status else target_n
 
     def get_packet_type(self, byte):
         '''Identify packet type based on its first byte.
@@ -379,7 +364,7 @@ class Decoder(srd.Decoder):
 
     def fallback(self, buf):
         ptype = self.get_packet_type(buf[0])
-        return [0, ['Unhandled ' + ptype + ': ' + ' '.join(['%02x' % b for b in buf])]]
+        return [0, [f'Unhandled {ptype}: ' + ' '.join(['%02x' % b for b in buf])]]
 
     def handle_a_sync(self, buf):
         if buf[-1] == 0x80:
@@ -421,7 +406,7 @@ class Decoder(srd.Decoder):
         if reasoncode == 0 and self.current_pc != addr:
             self.put(self.startsample, self.prevsample, self.out_ann,
                      [0, ['WARN: Unexpected PC change 0x%08x -> 0x%08x' % \
-                     (self.current_pc, addr)]])
+                         (self.current_pc, addr)]])
         elif reasoncode != 0:
             # Reset location when the trace has been interrupted.
             self.flush_current_loc()
@@ -437,17 +422,14 @@ class Decoder(srd.Decoder):
         else:
             self.cpu_state = 'arm'
 
-        cycstr = ''
-        if cyclecount is not None:
-            cycstr = ', cyclecount %d' % cyclecount
-
+        cycstr = ', cyclecount %d' % cyclecount if cyclecount is not None else ''
         if infobyte & 0x80: # LSIP packet
             self.put(self.startsample, self.prevsample, self.out_ann,
                      [0, ['WARN: LSIP I-Sync packet not implemented']])
 
         return [0, ['I-Sync: %s, PC 0x%08x, %s state%s' % \
-                    (reason, addr, self.cpu_state, cycstr), \
-                    'I-Sync: %s 0x%08x' % (reason, addr)]]
+                        (reason, addr, self.cpu_state, cycstr), \
+                        'I-Sync: %s 0x%08x' % (reason, addr)]]
 
     def handle_trigger(self, buf):
         return [0, ['Trigger event', 'Trigger']]
@@ -462,7 +444,7 @@ class Decoder(srd.Decoder):
 
             if n:
                 return [3, ['%d instructions executed, %d skipped due to ' \
-                            'condition codes' % (e, n),
+                                'condition codes' % (e, n),
                             '%d ins exec, %d skipped' % (e, n),
                             '%dE,%dN' % (e, n)]]
             else:
@@ -474,9 +456,15 @@ class Decoder(srd.Decoder):
             self.instructions_executed([not i1, not i2])
             txt1 = ('executed', 'skipped')
             txt2 = ('E', 'S')
-            return [3, ['Instruction 1 %s, instruction 2 %s' % (txt1[i1], txt1[i2]),
-                        'I1 %s, I2 %s' % (txt2[i1], txt2[i2]),
-                        '%s,%s' % (txt2[i1], txt2[i2])]]
+            return [
+                3,
+                [
+                    f'Instruction 1 {txt1[i1]}, instruction 2 {txt1[i2]}',
+                    f'I1 {txt2[i1]}, I2 {txt2[i2]}',
+                    f'{txt2[i1]},{txt2[i2]}',
+                ],
+            ]
+
         else:
             return self.fallback(buf)
 
@@ -497,7 +485,7 @@ class Decoder(srd.Decoder):
         txt = ''
 
         if cpu_state != self.cpu_state:
-            txt += ', to %s state' % cpu_state
+            txt += f', to {cpu_state} state'
             self.cpu_state = cpu_state
 
         annidx = 1
@@ -509,7 +497,7 @@ class Decoder(srd.Decoder):
                 txt += ', to non-secure state'
             if exc:
                 if exc < len(exc_names):
-                    txt += ', exception %s' % exc_names[exc]
+                    txt += f', exception {exc_names[exc]}'
                 else:
                     txt += ', exception 0x%02x' % exc
             if cancel:
@@ -555,8 +543,8 @@ class Decoder(srd.Decoder):
 
         # See if it is ready to be decoded.
         ptype = self.get_packet_type(self.buf[0])
-        if hasattr(self, 'handle_' + ptype):
-            func = getattr(self, 'handle_' + ptype)
+        if hasattr(self, f'handle_{ptype}'):
+            func = getattr(self, f'handle_{ptype}')
             data = func(self.buf)
         else:
             data = self.fallback(self.buf)

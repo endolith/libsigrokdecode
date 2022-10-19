@@ -82,8 +82,7 @@ class Decoder(srd.Decoder):
 
         data_edge = self.options['data_edge']
         divider = self.options['divider']
-        if divider < 0:
-            divider = 0
+        divider = max(divider, 0)
         reset_edge = self.options['reset_edge']
 
         condition = [{PIN_DATA: opt_edge_map[data_edge]}]

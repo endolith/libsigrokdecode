@@ -73,19 +73,18 @@ class Decoder(srd.Decoder):
 
     def dump_oregon_hex(self, start, finish):
         nib = self.decoded_nibbles
-        hexstring = ''
-        for x in nib:
-            hexstring += str(x[3]) if x[3] != '' else ' '
-        s = 'Oregon ' + self.ver + ' \"' + hexstring.upper() + '\"\n'
-        self.put(start, finish, self.out_binary,
-                [0, bytes([ord(c) for c in s])])
+        hexstring = ''.join(str(x[3]) if x[3] != '' else ' ' for x in nib)
+        s = f'Oregon {self.ver}' + ' \"' + hexstring.upper() + '\"\n'
+        self.put(start, finish, self.out_binary, [0, bytes(ord(c) for c in s)])
 
     def oregon_put_pre_and_sync(self, len_pream, len_sync, ver):
         ook = self.decoded
         self.decode_pos = len_pream
         self.ss, self.es = ook[0][0], ook[self.decode_pos][0]
-        self.putx([1, ['Oregon ' + ver + ' Preamble', ver + ' Preamble',
-                        ver + ' Pre', ver]])
+        self.putx(
+            [1, [f'Oregon {ver} Preamble', f'{ver} Preamble', f'{ver} Pre', ver]]
+        )
+
         self.decode_pos += len_sync
         self.ss, self.es = ook[len_pream][0], ook[self.decode_pos][0]
         self.putx([1, ['Sync', 'Syn', 'S']])
@@ -96,11 +95,9 @@ class Decoder(srd.Decoder):
         self.ver = ver
 
     def oregon(self):
-        self.ookstring = ''
         self.decode_pos = 0
         ook = self.decoded
-        for i in range(len(ook)):
-            self.ookstring += ook[i][2]
+        self.ookstring = ''.join(ook[i][2] for i in range(len(ook)))
         if '10011001' in self.ookstring[:40]:
             (preamble, data) = self.ookstring.split('10011001', 1)
             if len(data) > 0 and len(preamble) > 16:
@@ -153,7 +150,7 @@ class Decoder(srd.Decoder):
         self.oregon_v3() # Decode with v3 decoder.
 
     def oregon_nibbles(self, ookstring):
-        num_nibbles = int(len(ookstring) / 4)
+        num_nibbles = len(ookstring) // 4
         nibbles = []
         for i in range(num_nibbles):
             nibble = ookstring[4 * i : 4 * i + 4]
@@ -200,7 +197,7 @@ class Decoder(srd.Decoder):
                                 ook[self.decode_pos + 3][1], 4)
 
             rem_nibbles = len(self.ookstring[self.decode_pos:]) // 4
-            for i in range(rem_nibbles): # Display and save rest of nibbles.
+            for _ in range(rem_nibbles):
                 self.oregon_put_nib('', ook[self.decode_pos][0],
                                     ook[self.decode_pos + 3][1], 4)
             self.dump_oregon_hex(ook[0][0], ook[len(ook) - 1][1])
@@ -238,40 +235,57 @@ class Decoder(srd.Decoder):
 
     def oregon_baro(self, offset):
         nib = self.decoded_nibbles
-        baro = ''
-        if not (nib[offset + 2][3] == '' or nib[offset + 1][3] == ''
-           or nib[offset][3] == ''):
-            baro = str(int(nib[offset + 1][3] + nib[offset][3], 16) + 856)
-        self.put(nib[offset][0], nib[offset + 3][1],
-                 self.out_ann, [2, [baro + ' mb', baro]])
+        baro = (
+            ''
+            if (
+                nib[offset + 2][3] == ''
+                or nib[offset + 1][3] == ''
+                or nib[offset][3] == ''
+            )
+            else str(int(nib[offset + 1][3] + nib[offset][3], 16) + 856)
+        )
+
+        self.put(
+            nib[offset][0],
+            nib[offset + 3][1],
+            self.out_ann,
+            [2, [f'{baro} mb', baro]],
+        )
 
     def oregon_wind_dir(self, offset):
         nib = self.decoded_nibbles
         if nib[offset][3] != '':
             w_dir = int(int(nib[offset][3], 16) * 22.5)
             w_compass = dir_table[math.floor((w_dir + 11.25) / 22.5)]
-            self.put(nib[offset][0], nib[offset][1], self.out_ann,
-                [2, [w_compass + ' (' + str(w_dir) + '\u00b0)', w_compass]])
+            self.put(
+                nib[offset][0],
+                nib[offset][1],
+                self.out_ann,
+                [2, [f'{w_compass} ({w_dir}' + '\u00b0)', w_compass]],
+            )
 
     def oregon_channel(self, offset):
         nib = self.decoded_nibbles
         channel = ''
         if nib[offset][3] != '':
             ch = int(nib[offset][3], 16)
-            if self.ver != 'v3': # May not be true for all v2.1 sensors.
-                if ch != 0:
-                    bit_pos = 0
-                    while ((ch & 1) == 0):
-                        bit_pos += 1
-                        ch = ch >> 1
-                    if self.ver == 'v2.1':
-                        bit_pos += 1
-                    channel = str(bit_pos)
-            elif self.ver == 'v3': # Not sure if this applies to all v3's.
+            if self.ver == 'v3':
                 channel = str(ch)
+            elif ch != 0:
+                bit_pos = 0
+                while ((ch & 1) == 0):
+                    bit_pos += 1
+                    ch >>= 1
+                if self.ver == 'v2.1':
+                    bit_pos += 1
+                channel = str(bit_pos)
         if channel != '':
-            self.put(nib[offset][0], nib[offset][1],
-                     self.out_ann, [2, ['Ch ' + channel, channel]])
+            self.put(
+                nib[offset][0],
+                nib[offset][1],
+                self.out_ann,
+                [2, [f'Ch {channel}', channel]],
+            )
 
     def oregon_battery(self, offset):
         nib = self.decoded_nibbles
@@ -279,8 +293,12 @@ class Decoder(srd.Decoder):
         if nib[offset][3] != '':
             if (int(nib[offset][3], 16) >> 2) & 0x1 == 1:
                 batt = 'Low'
-            self.put(nib[offset][0], nib[offset][1],
-                     self.out_ann, [2, ['Batt ' + batt, batt]])
+            self.put(
+                nib[offset][0],
+                nib[offset][1],
+                self.out_ann,
+                [2, [f'Batt {batt}', batt]],
+            )
 
     def oregon_level2(self): # v2 and v3 level 2 decoder.
         nib = self.decoded_nibbles
@@ -290,8 +308,13 @@ class Decoder(srd.Decoder):
         # Allow user to try decoding an unknown sensor.
         if sensor_type == 'Unknown' and self.unknown != 'Unknown':
             sensor_type = self.unknown
-        self.put(nib[0][0], nib[3][1], self.out_ann,
-            [2, [names + ' - ' + sensor_type, names, nl[0]]])
+        self.put(
+            nib[0][0],
+            nib[3][1],
+            self.out_ann,
+            [2, [f'{names} - {sensor_type}', names, nl[0]]],
+        )
+
         self.oregon_channel(4)
         self.oregon_battery(7)
         if sensor_type == 'Rain':
@@ -338,19 +361,21 @@ class Decoder(srd.Decoder):
         if (nibbles + 1) < len(nib):
             if (nib[nibbles + 1][3] != '' and nib[nibbles][3] != ''
                  and checksum != -1):
-                if self.ver != 'v1':
-                    if checksum == (int(nib[nibbles + 1][3], 16) * 16 +
-                                    int(nib[nibbles][3], 16)):
-                        result = 'OK'
-                else:
+                if self.ver == 'v1':
                     if checksum == (int(nib[nibbles][3], 16) * 16 +
                                     int(nib[nibbles + 1][3], 16)):
                         result = 'OK'
+                elif checksum == (int(nib[nibbles + 1][3], 16) * 16 +
+                                    int(nib[nibbles][3], 16)):
+                    result = 'OK'
             rx_check = (nib[nibbles + 1][3] + nib[nibbles][3]).upper()
-            details = '%s Calc %s Rx %s ' % (result, hex(checksum)[2:].upper(),
-                                             rx_check)
-            self.put(nib[nibbles][0], nib[nibbles + 1][1],
-                     self.out_ann, [2, ['Checksum ' + details, result]])
+            details = f'{result} Calc {hex(checksum)[2:].upper()} Rx {rx_check} '
+            self.put(
+                nib[nibbles][0],
+                nib[nibbles + 1][1],
+                self.out_ann,
+                [2, [f'Checksum {details}', result]],
+            )
 
     def oregon_checksum(self, nibbles):
         checksum = 0

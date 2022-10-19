@@ -34,7 +34,7 @@ def decode_bit(edges, pulses_per_bit):
         else:
             return 'U'
 
-    if pulses_per_bit == 4:
+    elif pulses_per_bit == 4:
         # Datasheet says long pulse is 3 times short pulse.
         lmin = 2 # long min multiplier
         lmax = 5 # long max multiplier
@@ -59,22 +59,24 @@ def decode_bit(edges, pulses_per_bit):
             return 'U'
 
 def pinlabels(bit_count, packet_bit_count):
-    if packet_bit_count == 12:
-        if bit_count <= 6:
-            return 'A%i' % (bit_count - 1)
-        else:
-            return 'A%i/D%i' % (bit_count - 1, 12 - bit_count)
+    if (
+        packet_bit_count == 12
+        and bit_count <= 6
+        or packet_bit_count != 12
+        and packet_bit_count == 24
+        and bit_count <= 20
+    ):
+        return 'A%i' % (bit_count - 1)
+    elif packet_bit_count == 12:
+        return 'A%i/D%i' % (bit_count - 1, 12 - bit_count)
 
-    if packet_bit_count == 24:
-        if bit_count <= 20:
-            return 'A%i' % (bit_count - 1)
-        else:
-            return 'D%i' % (bit_count - 21)
+    elif packet_bit_count == 24:
+        return 'D%i' % (bit_count - 21)
 
 def decode_model(model, bits):
     if model == 'maplin_l95ar':
         address = 'Addr' # Address bits A0 to A5
-        for i in range(0, 6):
+        for i in range(6):
             address += ' %i:' % (i + 1) + ('on' if bits[i][0] == '0' else 'off')
         button = 'Button'
         # Button bits A6/D5 to A11/D0
@@ -94,7 +96,7 @@ def decode_model(model, bits):
     if model == 'xx1527':
         addr = 0
         addr_valid = 1
-        for i in range(0, 20):
+        for i in range(20):
             if bits[i][0] != 'U':
                 addr += int(bits[i][0]) * 2 ** i
             else:
@@ -105,10 +107,10 @@ def decode_model(model, bits):
         else:
             address = 'Invalid address as not all bits are 0 or 1'
 
-        output  = ' K0 = ' + bits[20][0] + ','
-        output += ' K1 = ' + bits[21][0] + ','
-        output += ' K2 = ' + bits[22][0] + ','
-        output += ' K3 = ' + bits[23][0]
+        output = f' K0 = {bits[20][0]},'
+        output += f' K1 = {bits[21][0]},'
+        output += f' K2 = {bits[22][0]},'
+        output += f' K3 = {bits[23][0]}'
         return [address, bits[0][1], bits[19][2], \
                 output, bits[20][1], bits[23][2]]
 
@@ -184,7 +186,7 @@ class Decoder(srd.Decoder):
 
             if self.bit_count < self.packet_bits: # Decode A0 to A11 / A23.
                 self.bit_count += 1
-                for i in range(0, self.pulses_per_bit):
+                for i in range(self.pulses_per_bit):
                     if i > 0:
                         pin = self.wait({0: 'e'}) # Get next edges if we need more.
                     samples = self.samplenum - self.samplenumber_last
@@ -211,5 +213,5 @@ class Decoder(srd.Decoder):
                 self.putx([4, ['Sync']]) # Write sync label.
                 self.reset() # Reset and wait for next set of pulses.
                 self.state = 'DECODE_TIMEOUT'
-            if not self.state == 'DECODE_TIMEOUT':
+            if self.state != 'DECODE_TIMEOUT':
                 self.samplenumber_last = self.samplenum

@@ -130,12 +130,12 @@ class Decoder(srd.Decoder):
         operands = 0
         string = ''
         while i < len(self.cmd_bytes):
-            if i == 0: # Parse header
+            if i == 0:
                 (src, dst) = decode_header(self.cmd_bytes[i]['val'])
-                string = 'HDR: ' + src + ', ' + dst
-            elif i == 1: # Parse opcode
+                string = f'HDR: {src}, {dst}'
+            elif i == 1:
                 string += ' | OPC: ' + opcodes.get(self.cmd_bytes[i]['val'], 'Invalid')
-            else: # Parse operands
+            else:
                 if operands == 0:
                     string += ' | OPS: '
                 operands += 1
@@ -156,13 +156,15 @@ class Decoder(srd.Decoder):
     def process(self):
         zero_time = ((self.rise - self.fall_start) / self.samplerate) * 1000.0
         total_time = ((self.fall_end - self.fall_start) / self.samplerate) * 1000.0
-        pulse = Pulse.INVALID
-
-        # VALIDATION: Identify pulse based on length of the low period
-        for key in timing:
-            if zero_time >= timing[key]['low']['min'] and zero_time <= timing[key]['low']['max']:
-                pulse = key
-                break
+        pulse = next(
+            (
+                key
+                for key in timing
+                if zero_time >= timing[key]['low']['min']
+                and zero_time <= timing[key]['low']['max']
+            ),
+            Pulse.INVALID,
+        )
 
         # VALIDATION: Invalid pulse
         if pulse == Pulse.INVALID:
@@ -176,17 +178,20 @@ class Decoder(srd.Decoder):
             return
 
         # VALIDATION: If waiting for ACK or EOM, only BIT pulses (0/1) are expected
-        if (self.stat == Stat.WAIT_ACK or self.stat == Stat.WAIT_EOM) and pulse == Pulse.START:
+        if self.stat in [Stat.WAIT_ACK, Stat.WAIT_EOM] and pulse == Pulse.START:
             self.put(self.fall_start, self.fall_end, self.out_ann, [9, ['Expected BIT: START received)']])
             self.stat = Stat.WAIT_START
 
         # VALIDATION: ACK bit pulse remains high till the next frame (if any): Validate only min time of the low period
-        if self.stat == Stat.WAIT_ACK and pulse != Pulse.START:
-            if total_time < timing[pulse]['total']['min']:
-                pulse = Pulse.INVALID
-                self.put(self.fall_start, self.fall_end, self.out_ann, [9, ['ACK pulse below minimun time']])
-                self.stat = Stat.WAIT_START
-                return
+        if (
+            self.stat == Stat.WAIT_ACK
+            and pulse != Pulse.START
+            and total_time < timing[pulse]['total']['min']
+        ):
+            pulse = Pulse.INVALID
+            self.put(self.fall_start, self.fall_end, self.out_ann, [9, ['ACK pulse below minimun time']])
+            self.stat = Stat.WAIT_START
+            return
 
         # VALIDATION / PING FRAME DETECTION: Initiator doesn't sets the EOM = 1 but stops sending when ack doesn't arrive
         if self.stat == Stat.GET_BITS and pulse == Pulse.START:
@@ -200,12 +205,18 @@ class Decoder(srd.Decoder):
             self.stat = Stat.WAIT_START
 
         # VALIDATION: Check timing of the BIT (0/1) pulse in any other case (not waiting for ACK)
-        if self.stat != Stat.WAIT_ACK and pulse != Pulse.START:
-            if total_time < timing[pulse]['total']['min'] or total_time > timing[pulse]['total']['max']:
-                self.put(self.fall_start, self.fall_end, self.out_ann, [9, ['Bit pulse exceeds total pulse timespan']])
-                pulse = Pulse.INVALID
-                self.stat = Stat.WAIT_START
-                return
+        if (
+            self.stat != Stat.WAIT_ACK
+            and pulse != Pulse.START
+            and (
+                total_time < timing[pulse]['total']['min']
+                or total_time > timing[pulse]['total']['max']
+            )
+        ):
+            self.put(self.fall_start, self.fall_end, self.out_ann, [9, ['Bit pulse exceeds total pulse timespan']])
+            pulse = Pulse.INVALID
+            self.stat = Stat.WAIT_START
+            return
 
         if pulse == Pulse.ZERO:
             bit = 0

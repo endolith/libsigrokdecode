@@ -62,8 +62,10 @@ class Decoder(srd.Decoder):
 
             # We're never seen this slave, add a new stream.
             self.slaves.append(databyte)
-            self.out_python.append(self.register(srd.OUTPUT_PYTHON,
-                                   proto_id='i2c-%s' % hex(databyte)))
+            self.out_python.append(
+                self.register(srd.OUTPUT_PYTHON, proto_id=f'i2c-{hex(databyte)}')
+            )
+
             self.stream = self.streamcount
             self.streamcount += 1
         elif cmd == 'STOP':
@@ -76,5 +78,3 @@ class Decoder(srd.Decoder):
 
             self.packets = []
             self.stream = -1
-        else:
-            pass # Do nothing, only add the I²C packet to our cache.

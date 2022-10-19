@@ -51,7 +51,7 @@ def crc16(byte_array):
     crc = 0x0000 # Initial value.
     # Reverse CRC calculation.
     for byte in byte_array:
-        for bit in range(8):
+        for _ in range(8):
             if (byte ^ crc) & 1:
                 crc = (crc >> 1) ^ reverse
             else:

@@ -143,12 +143,18 @@ class Decoder(srd.Decoder):
     def dump_pulse_lengths(self):
         if self.samplerate:
             self.pulse_lengths[-1] = self.sample_first # Fix final pulse length.
-            s = 'Pulses(us)='
-            s += ','.join(str(int(int(x) * 1000000 / self.samplerate))
-                          for x in self.pulse_lengths)
+            s = 'Pulses(us)=' + ','.join(
+                str(int(int(x) * 1000000 / self.samplerate))
+                for x in self.pulse_lengths
+            )
+
             s += '\n'
-            self.put(self.samplenum - 10, self.samplenum, self.out_binary,
-                     [0, bytes([ord(c) for c in s])])
+            self.put(
+                self.samplenum - 10,
+                self.samplenum,
+                self.out_binary,
+                [0, bytes(ord(c) for c in s)],
+            )
 
     def decode_nrz(self, start, samples, state):
         self.pulse_lengths.append(samples)
@@ -160,13 +166,10 @@ class Decoder(srd.Decoder):
                 self.es = self.ss + dsamples
                 self.putx([5, [state]])
                 self.decoded.append([self.ss, self.es, state])
-                self.edge_count += 1
-            elif samples >= dsamples * 0.5 and samples < dsamples * 1.5: # Last bit.
+            elif samples >= dsamples * 0.5: # Last bit.
                 self.putx([5, [state]])
                 self.decoded.append([self.ss, self.es, state])
-                self.edge_count += 1
-            else:
-                self.edge_count += 1
+            self.edge_count += 1
             samples -= dsamples
             self.ss += dsamples
             self.es += dsamples
@@ -185,8 +188,6 @@ class Decoder(srd.Decoder):
 
     def lock_onto_preamble(self, samples, state): # Filters and recovers clock.
         self.edge_count += 1
-        l2s = 5 # Max ratio of long to short pulses.
-
         # Filter incoming pulses to remove random noise.
         if self.state == 'DECODE_TIMEOUT':
             self.preamble = []
@@ -199,13 +200,13 @@ class Decoder(srd.Decoder):
         pre_detect = int(self.preamble_len) # Number of valid pulses to detect.
         pre_samples = self.samplenum - self.samplenumber_last
         if len(self.preamble) > 0:
+            l2s = 5 # Max ratio of long to short pulses.
+
             if (pre_samples * l2s < self.preamble[-1][1] or
                 self.preamble[-1][1] * l2s < pre_samples): # Garbage in.
                 self.put(self.samplenum, self.samplenum,
                          self.out_ann, [0, ['R']]) # Display resets.
-                self.preamble = [] # Clear buffer.
-                self.preamble.append([self.samplenumber_last,
-                                     pre_samples, state])
+                self.preamble = [[self.samplenumber_last, pre_samples, state]]
                 self.edge_count = 0
                 self.samplenumber_last = self.samplenum
                 self.word_first = self.samplenum
@@ -228,13 +229,16 @@ class Decoder(srd.Decoder):
             self.edge_count = 0
 
             for i in range(len(self.preamble)):
-                if i > 1:
-                    if (pre[i][1] > pre[i - 2][1] * 1.25 or
-                        pre[i][1] * 1.25 < pre[i - 2][1]): # Adjust ref width.
-                        if pre[i][2] == '1':
-                            self.sample_high = pre[i][1]
-                        else:
-                            self.sample_low = pre[i][1]
+                if i > 1 and (
+                    (
+                        pre[i][1] > pre[i - 2][1] * 1.25
+                        or pre[i][1] * 1.25 < pre[i - 2][1]
+                    )
+                ):
+                    if pre[i][2] == '1':
+                        self.sample_high = pre[i][1]
+                    else:
+                        self.sample_low = pre[i][1]
 
                 # Display start of preamble.
                 if self.decodeas == 'NRZ':
@@ -319,14 +323,11 @@ class Decoder(srd.Decoder):
             half_time += 1
         if samples > 0.75 * dsamples and samples <= 1.5 * dsamples: # Long p.
             half_time += 2
-            if half_time % 2 == 0: # Transition.
-                es = start
-            else:
-                es = start + int(samples / 2)
+            es = start if half_time % 2 == 0 else start + int(samples / 2)
             if ss == start:
                 lstate = 'E'
                 es = start + samples
-            if not (self.edge_count == 0 and pream == '1010'): # Skip first p.
+            if self.edge_count != 0 or pream != '1010': # Skip first p.
                 ook_bit = [ss, es, lstate]
             lstate = state
             ss = es

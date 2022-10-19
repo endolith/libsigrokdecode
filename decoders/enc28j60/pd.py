@@ -118,9 +118,8 @@ class Decoder(srd.Decoder):
         if (self.bsel0 is None) or (self.bsel1 is None):
             # We don't know the bank we're in yet.
             return None
-        else:
-            bank = (self.bsel1 << 1) + self.bsel0
-            return REGS[bank][reg_addr]
+        bank = (self.bsel1 << 1) + self.bsel0
+        return REGS[bank][reg_addr]
 
     def _put_register_header(self):
         reg_addr = self.mosi[0] & REG_ADDR_MASK
@@ -139,7 +138,7 @@ class Decoder(srd.Decoder):
             self.putr([ANN_REG_ADDR, ['Reg {0}'.format(reg_name),
                                       '{0}'.format(reg_name)]])
 
-            if (reg_name == '-') or (reg_name == 'Reserved'):
+            if reg_name in ['-', 'Reserved']:
                 self.putr([ANN_WARNING, ['Warning: Invalid register accessed.',
                                          'Warning']])
 
@@ -163,18 +162,14 @@ class Decoder(srd.Decoder):
     def _process_rcr(self):
         self.putc([ANN_RCR, ['Read Control Register', 'RCR']])
 
-        if (len(self.mosi) != 2) and (len(self.mosi) != 3):
+        if len(self.mosi) not in [2, 3]:
             self._put_command_warning('Invalid command length.')
             return
 
         self._put_register_header()
 
         reg_name = self._get_register_name(self.mosi[0] & REG_ADDR_MASK)
-        if reg_name is None:
-            # We can't tell if we're accessing MAC/MII registers or not
-            # Let's trust the user in this case.
-            pass
-        else:
+        if reg_name is not None:
             if (reg_name[0] == 'M') and (len(self.mosi) != 3):
                 self._put_command_warning('Attempting to read a MAC/MII '
                     + 'register without using the dummy byte.')

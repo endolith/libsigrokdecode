@@ -124,7 +124,7 @@ class Decoder(srd.Decoder):
         self.putx([Ann.RSB2, ['Part number: 0x%02x' % ret[3]]])
 
         p = part[(self.part_fam_flash_size, self.part_number)]
-        data = [Ann.DEV, ['Device: Atmel %s' % p]]
+        data = [Ann.DEV, [f'Device: Atmel {p}']]
         self.put(self.ss_device, self.es_cmd, self.out_ann, data)
 
         # Sanity check on reply.
@@ -230,16 +230,16 @@ class Decoder(srd.Decoder):
             self.handle_cmd_read_lock_bits(cmd,ret)
         elif cmd[0] == 0xa0 and (cmd[1] & (3 << 6)) == (0 << 6):
             self.handle_cmd_read_eeprom_memory(cmd, ret)
-        elif (cmd[0] == 0x20 or cmd[0] == 0x28) and ((cmd[1] & 0xf0) == 0x00):
+        elif cmd[0] in [0x20, 0x28] and (cmd[1] & 0xF0) == 0x00:
             self.handle_cmd_read_program_memory(cmd, ret)
-        elif (cmd[0] == 0x40 or cmd[0] == 0x48) and ((cmd[1] & 0xf0) == 0x00):
+        elif cmd[0] in [0x40, 0x48] and (cmd[1] & 0xF0) == 0x00:
             self.handle_cmd_load_program_memory_page(cmd, ret)
         elif (cmd[0] == 0x4C and ((cmd[1] & 0xf0) == 0x00)):
             self.handle_cmd_write_program_memory_page(cmd, ret)
         else:
             c = '%02x %02x %02x %02x' % tuple(cmd)
             r = '%02x %02x %02x %02x' % tuple(ret)
-            self.putx([Ann.WARN, ['Unknown command: %s (reply: %s)!' % (c, r)]])
+            self.putx([Ann.WARN, [f'Unknown command: {c} (reply: {r})!']])
 
     def decode(self, ss, es, data):
         ptype, mosi, miso = data

@@ -88,28 +88,22 @@ class Decoder(srd.Decoder):
             dt = self.samplenum - self.fall
         elif name.endswith('HIGH'):
             dt = self.samplenum - self.rise
-        if dt >= self.cnt[name]['min'] and dt <= self.cnt[name]['max']:
-            return True
-        return False
+        return dt >= self.cnt[name]['min'] and dt <= self.cnt[name]['max']
 
     def bits2num(self, bitlist):
-        number = 0
-        for i in range(len(bitlist)):
-            number += bitlist[-1 - i] * 2**i
-        return number
+        return sum(bitlist[-1 - i] * 2**i for i in range(len(bitlist)))
 
     def calculate_humidity(self, bitlist):
         h = 0
         if self.options['device'] == 'dht11':
-            h = self.bits2num(bitlist[0:8])
+            return self.bits2num(bitlist[:8])
         else:
-            h = self.bits2num(bitlist) / 10
-        return h
+            return self.bits2num(bitlist) / 10
 
     def calculate_temperature(self, bitlist):
         t = 0
         if self.options['device'] == 'dht11':
-            t = self.bits2num(bitlist[0:8])
+            t = self.bits2num(bitlist[:8])
         else:
             t = self.bits2num(bitlist[1:]) / 10
             if bitlist[0] == 1:
@@ -117,9 +111,11 @@ class Decoder(srd.Decoder):
         return t
 
     def calculate_checksum(self, bitlist):
-        checksum = 0
-        for i in range(8, len(bitlist) + 1, 8):
-            checksum += self.bits2num(bitlist[i-8:i])
+        checksum = sum(
+            self.bits2num(bitlist[i - 8 : i])
+            for i in range(8, len(bitlist) + 1, 8)
+        )
+
         return checksum % 256
 
     def __init__(self):
@@ -159,7 +155,7 @@ class Decoder(srd.Decoder):
                 self.putv([6, ['Temperature: %.1f °C' % t, 'T = %.1f °C' % t]])
             elif len(self.bits) == 40:
                 parity = self.bits2num(self.bits[-8:])
-                if parity == self.calculate_checksum(self.bits[0:32]):
+                if parity == self.calculate_checksum(self.bits[:32]):
                     self.putb([7, ['Checksum: OK', 'OK']])
                 else:
                     self.putb([7, ['Checksum: not OK', 'NOK']])

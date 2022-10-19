@@ -44,13 +44,15 @@ class LinFsm:
         self.uart_idle_count = 0
 
     def __init__(self):
-        a = dict()
-        a[LinFsm.State.WaitForBreak] = (LinFsm.State.Sync,)
-        a[LinFsm.State.Sync]         = (LinFsm.State.Pid,)
-        a[LinFsm.State.Pid]          = (LinFsm.State.Data,)
-        a[LinFsm.State.Data]         = (LinFsm.State.Data, LinFsm.State.Checksum)
-        a[LinFsm.State.Checksum]     = (LinFsm.State.WaitForBreak,)
-        a[LinFsm.State.Error]        = (LinFsm.State.Sync,)
+        a = {
+            LinFsm.State.WaitForBreak: (LinFsm.State.Sync,),
+            LinFsm.State.Sync: (LinFsm.State.Pid,),
+            LinFsm.State.Pid: (LinFsm.State.Data,),
+            LinFsm.State.Data: (LinFsm.State.Data, LinFsm.State.Checksum),
+            LinFsm.State.Checksum: (LinFsm.State.WaitForBreak,),
+            LinFsm.State.Error: (LinFsm.State.Sync,),
+        }
+
         self.allowed_state = a
 
         self.state = None
@@ -127,10 +129,12 @@ class Decoder(srd.Decoder):
         self.wipe_break_null_byte(value)
 
     def handle_break(self, value):
-        if self.fsm.state not in (LinFsm.State.WaitForBreak, LinFsm.State.Error):
-            if self.wipe_break_null_byte(value):
-                self.fsm.transit(LinFsm.State.Checksum)
-                self.handle_checksum()
+        if self.fsm.state not in (
+            LinFsm.State.WaitForBreak,
+            LinFsm.State.Error,
+        ) and self.wipe_break_null_byte(value):
+            self.fsm.transit(LinFsm.State.Checksum)
+            self.handle_checksum()
 
         self.fsm.reset()
         self.fsm.transit(LinFsm.State.Sync)
@@ -188,9 +192,6 @@ class Decoder(srd.Decoder):
 
             if not checksum_valid:
                 self.put(checksum[0], checksum[1], self.out_ann, [2, ['Checksum invalid']])
-        else:
-            pass # No response.
-
         self.lin_header.clear()
         self.lin_rsp.clear()
 
@@ -201,7 +202,7 @@ class Decoder(srd.Decoder):
         if self.lin_version == 2:
             id_ = pid & 0x3F
 
-            if id_ != 60 and id_ != 61:
+            if id_ not in [60, 61]:
                 checksum += pid
 
         for d in data:
@@ -243,5 +244,5 @@ class Decoder(srd.Decoder):
         #  - Sync byte is followed by a PID byte (Protected Identifier).
         #  - PID byte is followed by 1 - 8 data bytes and a final checksum byte.
 
-        handler = getattr(self, 'handle_%s' % self.fsm.state.lower())
+        handler = getattr(self, f'handle_{self.fsm.state.lower()}')
         handler(pdata)

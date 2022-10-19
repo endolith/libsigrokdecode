@@ -91,7 +91,7 @@ class Decoder(srd.Decoder):
             self.putb(self.bits[1], [2, ['Startbit', 'Start']])
         else:
             return
-        self.mode = sum([self.bits[2 + i][3] << (2 - i) for i in range(3)])
+        self.mode = sum(self.bits[2 + i][3] << (2 - i) for i in range(3))
         self.putbits(self.bits[2], self.bits[4], [3, ['Field: %d' % self.mode]])
         self.putb(self.bits[5], [4, ['Toggle: %d' % self.bits[5][3]]])
 
@@ -103,31 +103,39 @@ class Decoder(srd.Decoder):
             return
 
         if self.mode == 0 and len(self.bits) == 22: # Mode 0 standard
-            value = sum([self.bits[6 + i][3] << (7 - i) for i in range(8)])
+            value = sum(self.bits[6 + i][3] << (7 - i) for i in range(8))
             self.putbits(self.bits[6], self.bits[13], [5, ['Address: %0.2X' % value]])
 
-            value = sum([self.bits[14 + i][3] << (7 - i) for i in range(8)])
+            value = sum(self.bits[14 + i][3] << (7 - i) for i in range(8))
             self.putbits(self.bits[14], self.bits[21], [6, ['Data: %0.2X' % value]])
 
             self.bits = []
 
         if self.mode == 6 and len(self.bits) >= 15: # Mode 6
             if self.bits[6][3] == 0: # Short addr, Mode 6A
-                value = sum([self.bits[6 + i][3] << (7 - i) for i in range(8)])
+                value = sum(self.bits[6 + i][3] << (7 - i) for i in range(8))
                 self.putbits(self.bits[6], self.bits[13], [5, ['Address: %0.2X' % value]])
 
                 num_data_bits = len(self.bits) - 14
-                value = sum([self.bits[14 + i][3] << (num_data_bits - 1 - i) for i in range(num_data_bits)])
+                value = sum(
+                    self.bits[14 + i][3] << (num_data_bits - 1 - i)
+                    for i in range(num_data_bits)
+                )
+
                 self.putbits(self.bits[14], self.bits[-1], [6, ['Data: %X' % value]])
 
                 self.bits = []
 
             elif len(self.bits) >= 23: # Long addr, Mode 6B
-                value = sum([self.bits[6 + i][3] << (15 - i) for i in range(16)])
+                value = sum(self.bits[6 + i][3] << (15 - i) for i in range(16))
                 self.putbits(self.bits[6], self.bits[21], [5, ['Address: %0.2X' % value]])
 
                 num_data_bits = len(self.bits) - 22
-                value = sum([self.bits[22 + i][3] << (num_data_bits - 1 - i) for i in range(num_data_bits)])
+                value = sum(
+                    self.bits[22 + i][3] << (num_data_bits - 1 - i)
+                    for i in range(num_data_bits)
+                )
+
                 self.putbits(self.bits[22], self.bits[-1], [6, ['Data: %X' % value]])
 
                 self.bits = []
@@ -145,9 +153,8 @@ class Decoder(srd.Decoder):
                 conditions.append({'skip': self.halfbit * 6})
             (self.ir,) = self.wait(conditions)
 
-            if len(conditions) == 2:
-                if self.matched[1]:
-                    self.state = 'IDLE'
+            if len(conditions) == 2 and self.matched[1]:
+                self.state = 'IDLE'
 
             self.edges.append(self.samplenum)
             if len(self.edges) < 2:
@@ -174,23 +181,26 @@ class Decoder(srd.Decoder):
                 self.invert = self.ir == 0
                 self.putb(self.bits[-1], [0, ['%d' % value]]) # Add bit.
 
-            if (num_edges % 2) == 0: # Only count every second edge.
-                if self.deltas[-2] in [1, 2, 3] and self.deltas[-1] in [1, 2, 3, 6]:
-                    self.state = 'DATA'
-                    if self.deltas[-2] != self.deltas[-1]:
-                        # Insert border between 2 bits.
-                        self.edges.insert(-1, self.edges[-2] + self.deltas[-2] * self.halfbit)
-                        total = self.deltas[-1]
-                        self.deltas[-1] = self.deltas[-2]
-                        self.deltas.append(total - self.deltas[-1])
+            if (
+                (num_edges % 2) == 0
+                and self.deltas[-2] in [1, 2, 3]
+                and self.deltas[-1] in [1, 2, 3, 6]
+            ):
+                self.state = 'DATA'
+                if self.deltas[-2] != self.deltas[-1]:
+                    # Insert border between 2 bits.
+                    self.edges.insert(-1, self.edges[-2] + self.deltas[-2] * self.halfbit)
+                    total = self.deltas[-1]
+                    self.deltas[-1] = self.deltas[-2]
+                    self.deltas.append(total - self.deltas[-1])
 
-                        self.bits.append((self.edges[-4], self.edges[-2], self.deltas[-2] * 2, value))
+                    self.bits.append((self.edges[-4], self.edges[-2], self.deltas[-2] * 2, value))
 
-                        num_edges += 1
-                    else:
-                        self.bits.append((self.edges[-3], self.edges[-1], self.deltas[-1] * 2, value))
+                    num_edges += 1
+                else:
+                    self.bits.append((self.edges[-3], self.edges[-1], self.deltas[-1] * 2, value))
 
-                    self.putb(self.bits[-1], [0, ['%d' % value]]) # Add bit.
+                self.putb(self.bits[-1], [0, ['%d' % value]]) # Add bit.
 
             if len(self.bits) > 0:
                 self.handle_bit()

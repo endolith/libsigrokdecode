@@ -79,7 +79,7 @@ class Decoder(srd.Decoder):
                     write, reg = self.cmd & 0x80, self.cmd & 0x7f
                     rblob = regs.get(reg)
                     idx = 1 if write else 0
-                    self.putx([idx, ['%s: %s' % (rblob[0], "SHORT")]])
+                    self.putx([idx, [f'{rblob[0]}: SHORT']])
                     self.put_warn([self.ss_cmd, es], "Short transfer!")
                 self.reset_data()
             return
@@ -111,18 +111,18 @@ class Decoder(srd.Decoder):
             return
         valo, vali = None, None
         self.es_cmd = es
-        if self.expected == 3:
-            valo = self.mosi_bytes[1] << 16 | self.mosi_bytes[2] << 8 | \
-                   self.mosi_bytes[3]
-            vali = self.miso_bytes[1] << 16 | self.miso_bytes[2] << 8 | \
-                   self.miso_bytes[3]
-        elif self.expected == 2:
-            valo = self.mosi_bytes[1] << 8 | self.mosi_bytes[2]
-            vali = self.miso_bytes[1] << 8 | self.miso_bytes[2]
-        elif self.expected == 1:
+        if self.expected == 1:
             valo = self.mosi_bytes[1]
             vali = self.miso_bytes[1]
 
+        elif self.expected == 2:
+            valo = self.mosi_bytes[1] << 8 | self.mosi_bytes[2]
+            vali = self.miso_bytes[1] << 8 | self.miso_bytes[2]
+        elif self.expected == 3:
+            valo = self.mosi_bytes[1] << 16 | self.mosi_bytes[2] << 8 | \
+                       self.mosi_bytes[3]
+            vali = self.miso_bytes[1] << 16 | self.miso_bytes[2] << 8 | \
+                       self.miso_bytes[3]
         if write:
             self.putx([1, ['%s: %#x' % (rblob[0], valo)]])
         else:

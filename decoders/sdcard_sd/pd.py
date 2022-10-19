@@ -39,20 +39,36 @@ reg_csd = 'CSD_STRUCTURE RSVD TAAC NSAC TRAN_SPEED CCC READ_BL_LEN \
 
 Pin = SrdIntEnum.from_str('Pin', 'CMD CLK DAT0 DAT1 DAT2 DAT3')
 
-a = ['CMD%d' % i for i in range(64)] + ['ACMD%d' % i for i in range(64)] + \
-    ['RESPONSE_R' + r.upper() for r in responses] + \
-    ['R_STATUS_' + r for r in reg_card_status] + \
-    ['R_CID_' + r for r in reg_cid] + \
-    ['R_CSD_' + r for r in reg_csd] + \
-    ['BIT_' + r for r in ('0', '1')] + \
-    ['F_' + f for f in token_fields] + \
-    ['DECODED_BIT', 'DECODED_F']
+a = (
+    (
+        (
+            (
+                (
+                    (
+                        ['CMD%d' % i for i in range(64)]
+                        + ['ACMD%d' % i for i in range(64)]
+                        + [f'RESPONSE_R{r.upper()}' for r in responses]
+                    )
+                    + [f'R_STATUS_{r}' for r in reg_card_status]
+                )
+                + [f'R_CID_{r}' for r in reg_cid]
+            )
+            + [f'R_CSD_{r}' for r in reg_csd]
+        )
+        + [f'BIT_{r}' for r in ('0', '1')]
+    )
+    + [f'F_{f}' for f in token_fields]
+) + ['DECODED_BIT', 'DECODED_F']
+
 Ann = SrdIntEnum.from_list('Ann', a)
 
-s = ['GET_COMMAND_TOKEN', 'HANDLE_CMD999'] + \
-    ['HANDLE_CMD%d' % i for i in range(64)] + \
-    ['HANDLE_ACMD%d' % i for i in range(64)] + \
-    ['GET_RESPONSE_R%s' % r.upper() for r in responses]
+s = (
+    ['GET_COMMAND_TOKEN', 'HANDLE_CMD999']
+    + ['HANDLE_CMD%d' % i for i in range(64)]
+    + ['HANDLE_ACMD%d' % i for i in range(64)]
+    + [f'GET_RESPONSE_R{r.upper()}' for r in responses]
+)
+
 St = SrdStrEnum.from_list('St', s)
 
 class Bit:
@@ -127,11 +143,19 @@ class Decoder(srd.Decoder):
     def putc(self, desc):
         cmd = Ann.ACMD0 + self.cmd if self.is_acmd else self.cmd
         self.last_cmd = cmd
-        self.putt([cmd, ['%s: %s' % (self.cmd_str, desc), self.cmd_str,
-                         self.cmd_str.split(' ')[0]]])
+        self.putt(
+            [
+                cmd,
+                [
+                    f'{self.cmd_str}: {desc}',
+                    self.cmd_str,
+                    self.cmd_str.split(' ')[0],
+                ],
+            ]
+        )
 
     def putr(self, r):
-        self.putt([r, ['Response: %s' % r.name.split('_')[1]]])
+        self.putt([r, [f"Response: {r.name.split('_')[1]}"]])
 
     def cmd_name(self, cmd):
         c = acmd_names if self.is_acmd else cmd_names
@@ -159,13 +183,20 @@ class Decoder(srd.Decoder):
 
         # CMD[46:46]: Transmission bit (1 == host)
         t = 'host' if s[1].bit == 1 else 'card'
-        self.putf(1, 1, [Ann.F_TRANSMISSION, ['Transmission: ' + t, 'T: ' + t, 'T']])
+        self.putf(1, 1, [Ann.F_TRANSMISSION, [f'Transmission: {t}', f'T: {t}', 'T']])
 
         # CMD[45:40]: Command index (BCD; valid: 0-63)
         self.cmd = int('0b' + ''.join([str(s[i].bit) for i in range(2, 8)]), 2)
         c = '%s (%d)' % (self.cmd_name(self.cmd), self.cmd)
-        self.putf(2, 7, [Ann.F_CMD, ['Command: ' + c, 'Cmd: ' + c,
-                               'CMD%d' % self.cmd, 'Cmd', 'C']])
+        self.putf(
+            2,
+            7,
+            [
+                Ann.F_CMD,
+                [f'Command: {c}', f'Cmd: {c}', 'CMD%d' % self.cmd, 'Cmd', 'C'],
+            ],
+        )
+
 
         # CMD[39:08]: Argument
         self.arg = int('0b' + ''.join([str(s[i].bit) for i in range(8, 40)]), 2)
@@ -436,7 +467,7 @@ class Decoder(srd.Decoder):
             self.putf(bit, bit, [Ann.BIT_0 + self.token[bit].bit, ['%d' % self.token[bit].bit]])
         self.putf(0, 0, [Ann.F_START, ['Start bit', 'Start', 'S']])
         t = 'host' if self.token[1].bit == 1 else 'card'
-        self.putf(1, 1, [Ann.F_TRANSMISSION, ['Transmission: ' + t, 'T: ' + t, 'T']])
+        self.putf(1, 1, [Ann.F_TRANSMISSION, [f'Transmission: {t}', f'T: {t}', 'T']])
         self.putf(2, 7, [Ann.F_CMD, ['Reserved', 'Res', 'R']])
         self.putf(8, 134, [Ann.F_ARG, ['Argument', 'Arg', 'A']])
         self.putf(135, 135, [Ann.F_END, ['End bit', 'End', 'E']])
@@ -467,7 +498,7 @@ class Decoder(srd.Decoder):
             self.putf(bit, bit, [Ann.BIT_0 + self.token[bit].bit, ['%d' % self.token[bit].bit]])
         self.putf(0, 0, [Ann.F_START, ['Start bit', 'Start', 'S']])
         t = 'host' if self.token[1].bit == 1 else 'card'
-        self.putf(1, 1, [Ann.F_TRANSMISSION, ['Transmission: ' + t, 'T: ' + t, 'T']])
+        self.putf(1, 1, [Ann.F_TRANSMISSION, [f'Transmission: {t}', f'T: {t}', 'T']])
         self.putf(2, 7, [Ann.F_CMD, ['Reserved', 'Res', 'R']])
         self.putf(8, 39, [Ann.F_ARG, ['Argument', 'Arg', 'A']])
         self.putf(40, 46, [Ann.F_CRC, ['Reserved', 'Res', 'R']])
@@ -513,9 +544,13 @@ class Decoder(srd.Decoder):
 
         # Arg[11:08]: Voltage accepted
         v = ''.join(str(i.bit) for i in self.token[28:32])
-        av = accepted_voltages.get(int('0b' + v, 2), 'Unknown')
-        self.puta(8, 11, [Ann.DECODED_F,
-            ['Voltage accepted: ' + av, 'Voltage', 'Volt', 'V']])
+        av = accepted_voltages.get(int(f'0b{v}', 2), 'Unknown')
+        self.puta(
+            8,
+            11,
+            [Ann.DECODED_F, [f'Voltage accepted: {av}', 'Voltage', 'Volt', 'V']],
+        )
+
 
         # Arg[07:00]: Echo-back of check pattern
         self.puta(0, 7, [Ann.DECODED_F,
@@ -530,25 +565,21 @@ class Decoder(srd.Decoder):
 
             # State machine.
             if self.state == St.GET_COMMAND_TOKEN:
-                if len(self.token) == 0:
-                    # Wait for start bit (CMD = 0).
-                    if cmd_pin != 0:
-                        continue
+                if len(self.token) == 0 and cmd_pin != 0:
+                    continue
                 self.get_command_token(cmd_pin)
             elif self.state.value.startswith('HANDLE_CMD'):
                 # Call the respective handler method for the command.
                 a, cmdstr = 'a' if self.is_acmd else '', self.state.value[10:].lower()
-                handle_cmd = getattr(self, 'handle_%scmd%s' % (a, cmdstr))
+                handle_cmd = getattr(self, f'handle_{a}cmd{cmdstr}')
                 handle_cmd()
                 # Leave ACMD mode again after the first command after CMD55.
                 if self.is_acmd and cmdstr not in ('55', '63'):
                     self.is_acmd = False
             elif self.state.value.startswith('GET_RESPONSE'):
-                if len(self.token) == 0:
-                    # Wait for start bit (CMD = 0).
-                    if cmd_pin != 0:
-                        continue
+                if len(self.token) == 0 and cmd_pin != 0:
+                    continue
                 # Call the respective handler method for the response.
-                s = 'handle_response_%s' % self.state.value[13:].lower()
+                s = f'handle_response_{self.state.value[13:].lower()}'
                 handle_response = getattr(self, s)
                 handle_response(cmd_pin)

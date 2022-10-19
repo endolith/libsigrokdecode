@@ -60,8 +60,8 @@ class Decoder(srd.Decoder):
                 self.putx([2, ['Warning: Invalid JAAC parameter "%s"' % p]])
                 return
             x = 'Auto' if (p == '1') else 'Don\'t auto'
-            self.putx([0, ['%s-accept new connections' % x]])
-            self.putx([1, ['%s-accept connections' % x]])
+            self.putx([0, [f'{x}-accept new connections']])
+            self.putx([1, [f'{x}-accept connections']])
         elif s.startswith('AT+JPRO'):
             # AT+JPRO=<mode> (0 or 1)
             p = s[s.find('=') + 1:]
@@ -70,8 +70,8 @@ class Decoder(srd.Decoder):
                 return
             onoff = 'off' if (p == '0') else 'on'
             x = 'Leaving' if (p == '0') else 'Entering'
-            self.putx([0, ['%s production mode' % x]])
-            self.putx([1, ['Production mode = %s' % onoff]])
+            self.putx([0, [f'{x} production mode']])
+            self.putx([1, [f'Production mode = {onoff}']])
         elif s.startswith('AT+JRES'):
             # AT+JRES
             if s != 'AT+JRES': # JRES has no params.
@@ -88,7 +88,7 @@ class Decoder(srd.Decoder):
                 self.putx([2, ['Warning: Invalid data length "%s".' % l]])
             if int(l) != len(d):
                 self.putx([2, ['Warning: Data length mismatch (%d != %d).' % \
-                          (int(l), len(d))]])
+                              (int(l), len(d))]])
             # TODO: Warn if length > MTU size (which is firmware-dependent
             # and is negotiated by both Bluetooth devices upon connection).
             b = ''.join(['%02x ' % ord(c) for c in d])[:-1]
@@ -105,17 +105,17 @@ class Decoder(srd.Decoder):
             # TODO: Parse all the other parameters.
             pin = s[-4:]
             self.putx([0, ['Host set the Bluetooth PIN to "' + pin + '"']])
-            self.putx([1, ['PIN = ' + pin]])
+            self.putx([1, [f'PIN = {pin}']])
         elif s.startswith('AT+JSLN'):
             # AT+JSLN=<namelen>,<name>
             # namelen: Friendly name length (2 decimal digits). Max. len is 18.
             # name: The Bluetooth "friendly name" ('namelen' ASCII characters).
             name = s[s.find(',') + 1:]
             self.putx([0, ['Host set the Bluetooth name to "' + name + '"']])
-            self.putx([1, ['BT name = ' + name]])
+            self.putx([1, [f'BT name = {name}']])
         else:
-            self.putx([0, ['Host sent unsupported command: %s' % s]])
-            self.putx([1, ['Unsupported command: %s' % s]])
+            self.putx([0, [f'Host sent unsupported command: {s}']])
+            self.putx([1, [f'Unsupported command: {s}']])
 
     def handle_device_reply(self, rxtx, s):
         if s == 'ROK':
@@ -126,11 +126,11 @@ class Decoder(srd.Decoder):
             self.putx([1, ['ACK']])
         elif s.startswith('ERR'):
             error = s[s.find('=') + 1:]
-            self.putx([0, ['Device sent error code ' + error]])
-            self.putx([1, ['ERR = ' + error]])
+            self.putx([0, [f'Device sent error code {error}']])
+            self.putx([1, [f'ERR = {error}']])
         else:
-            self.putx([0, ['Device sent an unknown reply: %s' % s]])
-            self.putx([1, ['Unknown reply: %s' % s]])
+            self.putx([0, [f'Device sent an unknown reply: {s}']])
+            self.putx([1, [f'Unknown reply: {s}']])
 
     def decode(self, ss, es, data):
         ptype, rxtx, pdata = data

@@ -24,9 +24,7 @@ NUM_OUTPUT_CHANNELS = 8
 # TODO: Other I²C functions: general call / reset address, device ID address.
 
 def logic_channels(num_channels):
-    l = []
-    for i in range(num_channels):
-        l.append(tuple(['p%d' % i, 'P%d' % i]))
+    l = [('p%d' % i, 'P%d' % i) for i in range(num_channels)]
     return tuple(l)
 
 class Decoder(srd.Decoder):
@@ -109,10 +107,7 @@ class Decoder(srd.Decoder):
         elif cmd in ('ADDRESS READ', 'ADDRESS WRITE'):
             if ((self.state == 'GET SLAVE ADDR') and
                     self.check_correct_chip(databyte)):
-                if cmd == 'ADDRESS READ':
-                    self.state = 'READ DATA'
-                else:
-                    self.state = 'WRITE DATA'
+                self.state = 'READ DATA' if cmd == 'ADDRESS READ' else 'WRITE DATA'
             else:
                 self.state = 'IDLE'
         elif cmd in ('DATA READ', 'DATA WRITE'):

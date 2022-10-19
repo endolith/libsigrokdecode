@@ -124,17 +124,17 @@ class Decoder(srd.Decoder):
         sd = b & (1 << 0)
         tmp = 'normal operation' if (sd == 0) else 'shutdown mode'
         s = 'SD = %d: %s\n' % (sd, tmp)
-        s2 = 'SD = %s, ' % tmp
+        s2 = f'SD = {tmp}, '
 
         cmp_int = b & (1 << 1)
         tmp = 'comparator' if (cmp_int == 0) else 'interrupt'
         s += 'CMP/INT = %d: %s mode\n' % (cmp_int, tmp)
-        s2 += 'CMP/INT = %s, ' % tmp
+        s2 += f'CMP/INT = {tmp}, '
 
         pol = b & (1 << 2)
         tmp = 'low' if (pol == 0) else 'high'
         s += 'POL = %d: OS polarity is active-%s\n' % (pol, tmp)
-        s2 += 'POL = active-%s, ' % tmp
+        s2 += f'POL = active-{tmp}, '
 
         bits = (b & ((1 << 4) | (1 << 3))) >> 3
         s += 'Fault tolerance setting: %d bit(s)\n' % ft[bits]
@@ -173,7 +173,7 @@ class Decoder(srd.Decoder):
             # Wait for an address read/write operation.
             if cmd in ('ADDRESS READ', 'ADDRESS WRITE'):
                 self.warn_upon_invalid_slave(databyte)
-                self.state = cmd[8:] + ' REGS' # READ REGS / WRITE REGS
+                self.state = f'{cmd[8:]} REGS'
         elif self.state in ('READ REGS', 'WRITE REGS'):
             if cmd in ('DATA READ', 'DATA WRITE'):
                 handle_reg = getattr(self, 'handle_reg_0x%02x' % self.reg)
@@ -181,6 +181,3 @@ class Decoder(srd.Decoder):
             elif cmd == 'STOP':
                 # TODO: Any output?
                 self.state = 'IDLE'
-            else:
-                # self.putx([0, ['Ignoring: %s (data=%s)' % (cmd, databyte)]])
-                pass

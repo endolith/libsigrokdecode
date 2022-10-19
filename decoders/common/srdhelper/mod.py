@@ -26,10 +26,10 @@ def bcd2int(b):
     return (b & 0x0f) + ((b >> 4) * 10)
 
 def bin2int(s: str):
-    return int('0b' + s, 2)
+    return int(f'0b{s}', 2)
 
 def bitpack(bits):
-    return sum([b << i for i, b in enumerate(bits)])
+    return sum(b << i for i, b in enumerate(bits))
 
 def bitpack_lsb(bits, idx=None):
     '''Conversion from LSB first bit sequence to integer.'''
@@ -69,7 +69,7 @@ class SrdStrEnum(Enum):
 class SrdIntEnum(IntEnum):
     @classmethod
     def _prefix(cls, p):
-        return tuple([a.value for a in cls if a.name.startswith(p)])
+        return tuple(a.value for a in cls if a.name.startswith(p))
 
     @classmethod
     def prefixes(cls, prefix_list):
@@ -79,7 +79,7 @@ class SrdIntEnum(IntEnum):
 
     @classmethod
     def _suffix(cls, s):
-        return tuple([a.value for a in cls if a.name.endswith(s)])
+        return tuple(a.value for a in cls if a.name.endswith(s))
 
     @classmethod
     def suffixes(cls, suffix_list):

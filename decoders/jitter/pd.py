@@ -134,8 +134,8 @@ class Decoder(srd.Decoder):
             return False
         else:
             if self.sig_start is not None \
-               and self.sig_start != self.samplenum \
-               and self.sig_edge(self.oldsig, sig):
+                   and self.sig_start != self.samplenum \
+                   and self.sig_edge(self.oldsig, sig):
                 # If any transition in the resulting signal
                 # occurs while we are waiting for a clock,
                 # we increase the missed signal counter.
@@ -165,7 +165,7 @@ class Decoder(srd.Decoder):
             return False
         else:
             if self.clk_start != self.samplenum \
-               and self.clk_edge(self.oldclk, clk):
+                   and self.clk_edge(self.oldclk, clk):
                 # If any transition in the clock signal
                 # occurs while we are waiting for a resulting
                 # signal, we increase the missed clock counter.
@@ -185,14 +185,9 @@ class Decoder(srd.Decoder):
 
             # State machine:
             # For each sample we can move 2 steps forward in the state machine.
-            while True:
-                # Clock state has the lead.
-                if self.state == 'CLK':
-                    if self.handle_clk(clk, sig):
-                        break
-                if self.state == 'SIG':
-                    if self.handle_sig(clk, sig):
-                        break
-
+            while not (self.state == 'CLK' and self.handle_clk(clk, sig)) and not (
+                self.state == 'SIG' and self.handle_sig(clk, sig)
+            ):
+                pass
             # Save current CLK/SIG values for the next round.
             self.oldclk, self.oldsig = clk, sig

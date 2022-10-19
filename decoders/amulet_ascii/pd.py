@@ -30,7 +30,7 @@ Ann = SrdIntEnum.from_list('Ann',
     [c[0] for c in cmds.values()] + ['BIT', 'FIELD', 'WARN'])
 
 def cmd_annotation_classes():
-    return tuple([tuple([cmd[0].lower(), cmd[1]]) for cmd in cmds.values()])
+    return tuple((cmd[0].lower(), cmd[1]) for cmd in cmds.values())
 
 class Decoder(srd.Decoder):
     api_version = 3
@@ -71,9 +71,10 @@ class Decoder(srd.Decoder):
         # command in 'cmds' (defined in lists.py) has a matching
         # handler self.handle_<shortname>.
         def get_handler(cmd):
-            s = 'handle_%s' % cmds[cmd][0].lower().replace('/', '_')
+            s = f"handle_{cmds[cmd][0].lower().replace('/', '_')}"
             return getattr(self, s)
-        self.cmd_handlers = dict((cmd, get_handler(cmd)) for cmd in cmds.keys())
+
+        self.cmd_handlers = {cmd: get_handler(cmd) for cmd in cmds.keys()}
 
     def start(self):
         self.out_ann = self.register(srd.OUTPUT_ANN)
@@ -90,8 +91,7 @@ class Decoder(srd.Decoder):
 
     def cmd_ann_list(self):
         x, s = cmds[self.state][0], cmds[self.state][1]
-        return ['Command: %s (%s)' % (s, x), 'Command: %s' % s,
-                'Cmd: %s' % s, 'Cmd: %s' % x, x]
+        return [f'Command: {s} ({x})', f'Command: {s}', f'Cmd: {s}', f'Cmd: {x}', x]
 
     def emit_cmd_byte(self):
         self.ss_cmd = self.ss
@@ -121,9 +121,7 @@ class Decoder(srd.Decoder):
         if self.cmdstate == 1:
             self.emit_cmd_byte()
             self.addr = 0
-        elif self.cmdstate == 2:
-            self.emit_addr_bytes(pdata)
-        elif self.cmdstate == 3:
+        elif self.cmdstate in [2, 3]:
             self.emit_addr_bytes(pdata)
         self.cmdstate += 1
 
@@ -147,8 +145,17 @@ class Decoder(srd.Decoder):
             # Null terminated string ends.
             self.es_field = self.es
             self.putx([Ann.BIT, ['NULL']])
-            self.putf([Ann.FIELD, ['Value: %s' % self.value,
-                'Val: %s' % self.value, '%s' % self.value]])
+            self.putf(
+                [
+                    Ann.FIELD,
+                    [
+                        f'Value: {self.value}',
+                        f'Val: {self.value}',
+                        f'{self.value}',
+                    ],
+                ]
+            )
+
             self.emit_cmd_end([ann_class, self.cmd_ann_list()])
             return
         if self.cmdstate > 3:
@@ -183,8 +190,7 @@ class Decoder(srd.Decoder):
                 self.putf(Ann.WARN, ['Soft reset', 'Reset'])
             else:
                 page = chr(self.page[0]) + chr(self.page[1])
-                self.putf(Ann.FIELD, ['Page index: 0x%s' % page,
-                                      'Page: 0x%s' % page, '0x%s' % page])
+                self.putf(Ann.FIELD, [f'Page index: 0x{page}', f'Page: 0x{page}', f'0x{page}'])
         elif self.cmdstate == 5:
             self.checksum += pdata
             if (self.checksum & 0xFF) != 0:
@@ -253,8 +259,17 @@ class Decoder(srd.Decoder):
         elif self.cmdstate == 5:
             self.value += chr(pdata)
             self.es_field = self.es
-            self.putf([Ann.FIELD, ['Value: 0x%s' % self.value,
-                'Val: 0x%s' % self.value, '0x%s' % self.value]])
+            self.putf(
+                [
+                    Ann.FIELD,
+                    [
+                        f'Value: 0x{self.value}',
+                        f'Val: 0x{self.value}',
+                        f'0x{self.value}',
+                    ],
+                ]
+            )
+
             self.emit_cmd_end([Ann.SBV, self.cmd_ann_list()])
         self.cmdstate += 1
 
@@ -416,10 +431,10 @@ class Decoder(srd.Decoder):
         if self.cmdstate == 4:
             self.ss_field = self.ss
             self.value = int(chr(pdata), 16) << 4
-            self.putx([Ann.BIT, ['High nibble 0x%s' % pdata, '0x%s' % pdata]])
+            self.putx([Ann.BIT, [f'High nibble 0x{pdata}', f'0x{pdata}']])
         elif self.cmdstate == 5:
             self.value += int(chr(pdata), 16)
-            self.putx([Ann.BIT, ['Low nibble 0x%s' % pdata, '0x%s' % pdata]])
+            self.putx([Ann.BIT, [f'Low nibble 0x{pdata}', f'0x{pdata}']])
             self.es_field = self.es
             self.putf([Ann.FIELD, ['Value: 0x%02X' % self.value,
                                    '0x%02X' % self.value]])
@@ -434,7 +449,7 @@ class Decoder(srd.Decoder):
                 self.value = 0
                 self.ss_field = self.ss
             self.value += int(chr(pdata), 16) << 12 - (4 * nibble)
-            self.putx([Ann.BIT, ['0x%s' % pdata]])
+            self.putx([Ann.BIT, [f'0x{pdata}']])
             if nibble == 3:
                 self.putf([Ann.FIELD, ['Value: 0x%04x' % self.value,
                                        '0x%04X' % self.value]])
@@ -456,13 +471,13 @@ class Decoder(srd.Decoder):
                 if pdata == 0x00:
                     self.emit_cmd_end([Ann.GRPCR, self.cmd_ann_list()])
                     return
-                self.value = int(chr(pdata), 16) << 4
                 self.ss_field = self.ss
-                self.putx([Ann.BIT, ['0x%s' % pdata]])
-            if nibble == 2:
+                self.value = int(chr(pdata), 16) << 4
+                self.putx([Ann.BIT, [f'0x{pdata}']])
+            elif nibble == 2:
                 self.value += int(chr(pdata), 16)
                 self.es_field = self.es
-                self.putx([Ann.BIT, ['0x%s' % pdata]])
+                self.putx([Ann.BIT, [f'0x{pdata}']])
                 self.putf([Ann.FIELD, ['0x%02X' % self.value]])
         self.cmdstate += 1
 
@@ -474,8 +489,17 @@ class Decoder(srd.Decoder):
         elif self.cmdstate == 5:
             self.value += chr(pdata)
             self.es_field = self.es
-            self.putf([Ann.FIELD, ['Value: 0x%s' % self.value,
-                'Val: 0x%s' % self.value, '0x%s' % self.value]])
+            self.putf(
+                [
+                    Ann.FIELD,
+                    [
+                        f'Value: 0x{self.value}',
+                        f'Val: 0x{self.value}',
+                        f'0x{self.value}',
+                    ],
+                ]
+            )
+
             self.emit_cmd_end([Ann.SBVR, self.cmd_ann_list()])
         self.cmdstate += 1
 
@@ -681,9 +705,12 @@ class Decoder(srd.Decoder):
 
         # Handle commands.
         try:
-            abort_current = (0xD0 <= pdata[0] <= 0xF7) and \
-                (not (self.state in cmds_with_high_bytes)) and \
-                self.state != None
+            abort_current = (
+                0xD0 <= pdata[0] <= 0xF7
+                and self.state not in cmds_with_high_bytes
+                and self.state != None
+            )
+
             if abort_current:
                 self.putx([Ann.WARN, ['Command aborted by invalid byte', 'Abort']])
                 self.state = pdata[0]

@@ -167,13 +167,12 @@ class Decoder(srd.Decoder):
             elif self.samplerate < 5000000:
                 self.putm([1, ['Sampling rate is suggested to be above 5MHz ' +
                                'for proper overdrive mode decoding.']])
-        else:
-            if self.samplerate < 400000:
-                self.putm([1, ['Sampling rate is too low. Must be above ' +
-                               '400kHz for proper normal mode decoding.']])
-            elif self.samplerate < 1000000:
-                self.putm([1, ['Sampling rate is suggested to be above ' +
-                               '1MHz for proper normal mode decoding.']])
+        elif self.samplerate < 400000:
+            self.putm([1, ['Sampling rate is too low. Must be above ' +
+                           '400kHz for proper normal mode decoding.']])
+        elif self.samplerate < 1000000:
+            self.putm([1, ['Sampling rate is suggested to be above ' +
+                           '1MHz for proper normal mode decoding.']])
 
     def metadata(self, key, value):
         if key != srd.SRD_CONF_SAMPLERATE:
@@ -185,7 +184,7 @@ class Decoder(srd.Decoder):
         # number of samples have been skipped (i.e. time has passed).
         cnt = int((t[self.overdrive] / 1000000.0) * self.samplerate)
         samples_to_skip = (start + cnt) - self.samplenum
-        samples_to_skip = samples_to_skip if (samples_to_skip > 0) else 0
+        samples_to_skip = max(samples_to_skip, 0)
         return self.wait([{0: 'f'}, {'skip': samples_to_skip}])
 
     def decode(self):
@@ -206,7 +205,7 @@ class Decoder(srd.Decoder):
                 # Get time since last rising edge.
                 time = ((self.fall - self.rise) / self.samplerate) * 1000000.0
                 if self.rise > 0 and \
-                    time < timing['REC']['min'][self.overdrive]:
+                        time < timing['REC']['min'][self.overdrive]:
                     self.putfr([1, ['Recovery time not long enough'
                         'Recovery too short',
                         'REC < ' + str(timing['REC']['min'][self.overdrive])]])
@@ -232,8 +231,8 @@ class Decoder(srd.Decoder):
                     self.putfr([2, ['Reset', 'Rst', 'R']])
                     self.state = 'PRESENCE DETECT HIGH'
                 elif self.overdrive == True and \
-                    time >= timing['RSTL']['min'][self.overdrive] and \
-                    time < timing['RSTL']['max'][self.overdrive]:
+                        time >= timing['RSTL']['min'][self.overdrive] and \
+                        time < timing['RSTL']['max'][self.overdrive]:
                     # Overdrive reset pulse.
                     self.putfr([2, ['Reset', 'Rst', 'R']])
                     self.state = 'PRESENCE DETECT HIGH'
@@ -243,10 +242,7 @@ class Decoder(srd.Decoder):
                         self.putfr([1, ['Low signal not long enough',
                             'Low too short',
                             'LOW < ' + str(timing['LOWR']['min'][self.overdrive])]])
-                    if time < timing['LOWR']['max'][self.overdrive]:
-                        self.bit = 1 # Short pulse is a 1 bit.
-                    else:
-                        self.bit = 0 # Long pulse is a 0 bit.
+                    self.bit = 1 if time < timing['LOWR']['max'][self.overdrive] else 0
                     # Wait for end of slot.
                     self.state = 'SLOT'
                 else:
@@ -313,7 +309,7 @@ class Decoder(srd.Decoder):
                         self.bit_count += 1
                     # Check for overdrive ROM command.
                     if self.bit_count >= 8:
-                        if self.command == 0x3c or self.command == 0x69:
+                        if self.command in [0x3C, 0x69]:
                             self.overdrive = True
                             self.put(self.samplenum, self.samplenum,
                                 self.out_ann,

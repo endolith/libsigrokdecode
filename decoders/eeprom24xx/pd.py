@@ -114,20 +114,35 @@ class Decoder(srd.Decoder):
 
     def put_control_word(self, bits):
         s = ''.join(['%d' % b[0] for b in reversed(bits[4:])])
-        self.putbits(7, 4, bits, [1, ['Control code bits: ' + s,
-            'Control code: ' + s, 'Ctrl code: ' + s, 'Ctrl code', 'Ctrl', 'C']])
+        self.putbits(
+            7,
+            4,
+            bits,
+            [
+                1,
+                [
+                    f'Control code bits: {s}',
+                    f'Control code: {s}',
+                    f'Ctrl code: {s}',
+                    'Ctrl code',
+                    'Ctrl',
+                    'C',
+                ],
+            ],
+        )
+
         for i in reversed(range(self.chip['addr_pins'])):
             self.putbits(i + 1, i + 1, bits,
                 [2, ['Address bit %d: %d' % (i, bits[i + 1][0]),
                      'Addr bit %d' % i, 'A%d' % i, 'A']])
         s1 = 'read' if bits[0][0] == 1 else 'write'
         s2 = 'R' if bits[0][0] == 1 else 'W'
-        self.putbits(0, 0, bits, [3, ['R/W bit: ' + s1, 'R/W', 'RW', s2]])
+        self.putbits(0, 0, bits, [3, [f'R/W bit: {s1}', 'R/W', 'RW', s2]])
         self.putbits(7, 0, bits, [6, ['Control word', 'Control', 'CW', 'C']])
 
     def put_word_addr(self, p):
+        a = p[1][3]
         if self.chip['addr_bytes'] == 1:
-            a = p[1][3]
             self.put(p[1][0], p[1][1], self.out_ann,
                 [4, ['Word address byte: %02X' % a, 'Word addr byte: %02X' % a,
                      'Addr: %02X' % a, 'A: %02X' % a, '%02X' % a]])
@@ -135,7 +150,6 @@ class Decoder(srd.Decoder):
                      'Word addr', 'Addr', 'A']])
             self.addr_counter = a
         else:
-            a = p[1][3]
             self.put(p[1][0], p[1][1], self.out_ann,
                 [4, ['Word address high byte: %02X' % a,
                      'Word addr high byte: %02X' % a,
@@ -155,8 +169,8 @@ class Decoder(srd.Decoder):
         else:
             s = '%04X' % self.addr_counter
         self.put(p[0], p[1], self.out_ann, [5, ['Data byte %s: %02X' % \
-            (s, p[3]), 'Data byte: %02X' % p[3], \
-            'Byte: %02X' % p[3], 'DB: %02X' % p[3], '%02X' % p[3]]])
+                (s, p[3]), 'Data byte: %02X' % p[3], \
+                'Byte: %02X' % p[3], 'DB: %02X' % p[3], '%02X' % p[3]]])
 
     def put_data_bytes(self, idx, cls, s):
         for p in self.packets[idx:]:
@@ -164,10 +178,20 @@ class Decoder(srd.Decoder):
             self.addr_counter += 1
         self.put(self.packets[idx][0], self.packets[-1][1], self.out_ann,
             [8, ['Data', 'D']])
-        a = ''.join(['%s' % c[0] for c in s.split()]).upper()
-        self.putb([cls, ['%s (%s): %s' % (s, self.addr_and_len(), \
-                  self.hexbytes(self.chip['addr_bytes'])),
-                  '%s (%s)' % (s, self.addr_and_len()), s, a, s[0]]])
+        a = ''.join([f'{c[0]}' for c in s.split()]).upper()
+        self.putb(
+            [
+                cls,
+                [
+                    f"{s} ({self.addr_and_len()}): {self.hexbytes(self.chip['addr_bytes'])}",
+                    f'{s} ({self.addr_and_len()})',
+                    s,
+                    a,
+                    s[0],
+                ],
+            ]
+        )
+
         self.putbin([0, bytes(self.bytebuf[self.chip['addr_bytes']:])])
 
     def addr_and_len(self):
@@ -179,7 +203,7 @@ class Decoder(srd.Decoder):
         d = '%d bytes' % num_data_bytes
         if num_data_bytes <= 1:
             d = d[:-1]
-        return 'addr=%s, %s' % (a, d)
+        return f'addr={a}, {d}'
 
     def decide_on_seq_or_rnd_read(self):
         if len(self.bytebuf) < 2:
@@ -245,7 +269,7 @@ class Decoder(srd.Decoder):
             return
         self.packet_append()
         self.put_control_word(self.bits)
-        self.state = '%s GET ACK NACK AFTER CONTROL WORD' % self.cmd[8]
+        self.state = f'{self.cmd[8]} GET ACK NACK AFTER CONTROL WORD'
 
     def handle_r_get_ack_nack_after_control_word(self):
         if self.cmd == 'ACK':
@@ -428,6 +452,6 @@ class Decoder(srd.Decoder):
         self.ss, self.es = ss, es
 
         # State machine.
-        s = 'handle_%s' % self.state.lower().replace(' ', '_')
+        s = f"handle_{self.state.lower().replace(' ', '_')}"
         handle_state = getattr(self, s)
         handle_state()

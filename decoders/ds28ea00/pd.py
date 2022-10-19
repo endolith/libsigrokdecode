@@ -70,8 +70,7 @@ class Decoder(srd.Decoder):
 
         # State machine.
         if code == 'RESET/PRESENCE':
-            self.putx([0, ['Reset/presence: %s'
-                           % ('true' if val else 'false')]])
+            self.putx([0, [f"Reset/presence: {'true' if val else 'false'}"]])
             self.state = 'ROM'
         elif code == 'ROM':
             self.rom = val

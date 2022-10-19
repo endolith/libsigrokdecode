@@ -66,9 +66,6 @@ class Value:
 
             self.value = newval
             self.timestamp = timestamp
-        elif False:
-            if self.value is not None:
-                self.onchange(self.timestamp, self.value, timestamp, newval)
 
 MAX_CHANNELS = 8 # 10 channels causes some weird problems...
 
@@ -115,7 +112,7 @@ class Decoder(srd.Decoder):
         self.turns = Value(self.on_turns)
 
     def on_phase(self, told, vold, tnew, vnew):
-        self.put(told, tnew, self.out_ann, [0, ['{}'.format(vold)]])
+        self.put(told, tnew, self.out_ann, [0, [f'{vold}']])
 
     def on_increment(self, told, vold, tnew, vnew):
         if vold == 0:
@@ -127,7 +124,7 @@ class Decoder(srd.Decoder):
         self.put(told, tnew, self.out_ann, [1, [message]])
 
     def on_count(self, told, vold, tnew, vnew):
-        self.put(told, tnew, self.out_ann, [2, ['{}'.format(vold)]])
+        self.put(told, tnew, self.out_ann, [2, [f'{vold}']])
 
     def on_turns(self, told, vold, tnew, vnew):
         self.put(told, tnew, self.out_ann, [3, ['{:+d}'.format(vold)]])
@@ -180,8 +177,13 @@ class Decoder(srd.Decoder):
                 period = (curtime - prevtime) / self.samplerate
                 freq = abs(phasedelta_raw) / period
 
-                self.put(prevtime, curtime, self.out_ann, [4, [
-                    '{}s, {}Hz'.format(prefix_fmt(period), prefix_fmt(freq))]])
+                self.put(
+                    prevtime,
+                    curtime,
+                    self.out_ann,
+                    [4, [f'{prefix_fmt(period)}s, {prefix_fmt(freq)}Hz']],
+                )
+
 
                 if self.options['avg_period']:
                     self.last_n.append((abs(phasedelta_raw), period))
@@ -189,9 +191,18 @@ class Decoder(srd.Decoder):
                         self.last_n.popleft()
 
                     avg_period = sum(v for u, v in self.last_n) / (sum(u for u, v in self.last_n) or 1)
-                    self.put(prevtime, curtime, self.out_ann, [5, [
-                        '{}s, {}Hz'.format(prefix_fmt(avg_period),
-                            prefix_fmt(1 / avg_period))]])
+                    self.put(
+                        prevtime,
+                        curtime,
+                        self.out_ann,
+                        [
+                            5,
+                            [
+                                f'{prefix_fmt(avg_period)}s, {prefix_fmt(1 / avg_period)}Hz'
+                            ],
+                        ],
+                    )
+
 
                 if self.options['edges']:
                     self.put(prevtime, curtime, self.out_ann, [6, ['{}rpm'.format(prefix_fmt(60 * freq / self.options['edges'], emin=0))]])
